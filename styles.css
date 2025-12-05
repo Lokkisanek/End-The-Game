@@ -1,0 +1,439 @@
+:root {
+  --bg-1: #0a1428;
+  --bg-2: #15244b;
+  --accent: #8ef2ff;
+  --accent-2: #d795ff;
+  --frost: rgba(14, 22, 40, 0.65);
+  --frost-strong: rgba(18, 29, 55, 0.9);
+  --text: #f4f8ff;
+  --muted: #a3b6d9;
+  --taskbar: rgba(6, 10, 20, 0.8);
+  --window-width: min(460px, 90vw);
+  font-family: "Space Grotesk", "Segoe UI", sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  min-height: 100vh;
+  background: radial-gradient(circle at 20% 20%, #1f3f93, transparent 50%),
+    radial-gradient(circle at 80% 10%, #9241ff, transparent 45%),
+    radial-gradient(circle at 60% 70%, #0c6c91, transparent 55%),
+    linear-gradient(135deg, var(--bg-1), var(--bg-2));
+  color: var(--text);
+  display: flex;
+  font-family: inherit;
+  overflow: hidden;
+}
+
+.desktop {
+  flex: 1;
+  position: relative;
+  padding: 2.5rem;
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-start;
+}
+
+.icon-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 1.5rem;
+  width: min(420px, 100%);
+}
+
+.desktop-icon {
+  background: transparent;
+  border: none;
+  color: inherit;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.8rem;
+  border-radius: 1rem;
+  cursor: pointer;
+  transition: background 0.2s ease, transform 0.2s ease;
+  font-size: 0.95rem;
+}
+
+.desktop-icon:focus-visible,
+.desktop-icon:hover {
+  background: rgba(255, 255, 255, 0.1);
+  outline: 2px solid rgba(255, 255, 255, 0.2);
+  transform: translateY(-2px);
+}
+
+.icon-symbol {
+  width: 64px;
+  height: 64px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.15);
+  display: grid;
+  place-items: center;
+  font-size: 1.6rem;
+}
+
+.icon-label {
+  text-align: center;
+}
+
+.taskbar {
+  position: fixed;
+  left: 50%;
+  bottom: 20px;
+  transform: translateX(-50%);
+  width: min(700px, 90vw);
+  border-radius: 30px;
+  padding: 0.4rem 1.2rem;
+  background: var(--taskbar);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.start-button {
+  width: 44px;
+  height: 44px;
+  border-radius: 16px;
+  border: none;
+  background: rgba(255, 255, 255, 0.12);
+  color: var(--text);
+  font-size: 1.2rem;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.start-button:hover {
+  background: rgba(255, 255, 255, 0.22);
+}
+
+.taskbar-apps {
+  flex: 1;
+  display: flex;
+  gap: 0.6rem;
+}
+
+.taskbar-apps button {
+  min-width: 100px;
+  border: none;
+  padding: 0.35rem 0.8rem;
+  border-radius: 14px;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: background 0.2s ease;
+}
+
+.taskbar-apps button.active {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.taskbar-clock {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.start-menu {
+  position: fixed;
+  left: 50%;
+  bottom: 90px;
+  transform: translateX(-50%) scale(0.95);
+  width: min(380px, 90vw);
+  border-radius: 28px;
+  background: var(--frost);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(18px);
+  padding: 1.6rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.4rem;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.start-menu.visible {
+  opacity: 1;
+  transform: translateX(-50%) scale(1);
+  pointer-events: auto;
+}
+
+.start-menu__header p {
+  font-size: 1.3rem;
+  font-weight: 600;
+}
+
+.start-menu__header small {
+  color: var(--muted);
+}
+
+.start-menu__apps {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.8rem;
+}
+
+.start-menu__apps button {
+  border: none;
+  border-radius: 18px;
+  padding: 0.8rem 1rem;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text);
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.2s ease;
+}
+
+.start-menu__apps button:hover {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.start-menu__footer {
+  display: flex;
+  justify-content: space-between;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.window {
+  position: absolute;
+  top: 120px;
+  left: 260px;
+  width: var(--window-width);
+  background: var(--frost-strong);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 26px;
+  backdrop-filter: blur(20px);
+  box-shadow: 0 25px 60px rgba(4, 4, 42, 0.45);
+  overflow: hidden;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.window--hidden {
+  opacity: 0;
+  pointer-events: none;
+  transform: scale(0.95);
+}
+
+.window__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.8rem 1.2rem;
+  background: rgba(255, 255, 255, 0.05);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  cursor: move;
+}
+
+.window__title {
+  font-weight: 600;
+}
+
+.window__actions {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.window__btn {
+  width: 34px;
+  height: 34px;
+  border-radius: 12px;
+  border: none;
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text);
+  cursor: pointer;
+  font-size: 1rem;
+}
+
+.window__btn:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.window__content {
+  padding: 1.2rem;
+  max-height: 60vh;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.browser-search form {
+  display: flex;
+  gap: 0.6rem;
+}
+
+.browser-search input {
+  flex: 1;
+  border-radius: 999px;
+  border: none;
+  padding: 0.8rem 1.2rem;
+  background: rgba(255, 255, 255, 0.12);
+  color: var(--text);
+}
+
+.browser-search button {
+  border-radius: 999px;
+  border: none;
+  padding: 0.8rem 1.6rem;
+  background: var(--accent);
+  color: #04132b;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.search-results {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.search-results article {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 1rem;
+  padding: 0.8rem 1rem;
+}
+
+.file-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+}
+
+.file-item {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.7rem 1rem;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 1rem;
+}
+
+.notes-area textarea {
+  width: 100%;
+  min-height: 220px;
+  border-radius: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text);
+  padding: 1rem;
+  resize: vertical;
+}
+
+.notes-area small {
+  color: var(--muted);
+}
+
+.paint-canvas {
+  border-radius: 1.5rem;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(4, 13, 30, 0.6);
+  width: 100%;
+  height: 240px;
+}
+
+.paint-controls {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.paint-controls input[type="color"],
+.paint-controls input[type="range"] {
+  flex: 1;
+}
+
+.progress-app {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.progress-app form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  padding: 1rem;
+  border-radius: 1.4rem;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.progress-app textarea,
+.progress-app input[type="text"] {
+  width: 100%;
+  border-radius: 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(4, 13, 30, 0.4);
+  color: var(--text);
+  padding: 0.8rem 1rem;
+  font-size: 0.95rem;
+  resize: vertical;
+}
+
+.progress-app button {
+  align-self: flex-start;
+  border: none;
+  border-radius: 999px;
+  padding: 0.6rem 1.4rem;
+  background: var(--accent-2);
+  color: #0f1229;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.progress-app__code,
+.progress-app__load-result {
+  padding: 0.8rem 1rem;
+  border-radius: 1rem;
+  background: rgba(255, 255, 255, 0.05);
+  font-family: "Space Grotesk", monospace;
+}
+
+/* Remove Progress app styles (app removed) */
+.progress-app,
+.progress-app * {
+  display: none !important;
+}
+
+.progress-app__history {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.progress-app__history-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.progress-app__history-item small {
+  display: block;
+  font-size: 0.75rem;
+  color: inherit;
+}
+
+@media (max-width: 900px) {
+  .taskbar {
+    bottom: 12px;
+  }
+
+  .desktop {
+    padding: 1.5rem;
+  }
+
+  .window__content {
+    max-height: 70vh;
+  }
+}
