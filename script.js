@@ -1,3 +1,27 @@
+function getWifiLoadProfile() {
+  const ssid = gameState.currentNetwork?.ssid;
+  return wifiLoadingProfiles[ssid] || wifiLoadingProfiles.default;
+}
+
+function getVpnPenaltyMs() {
+  if (typeof gameState.vpnTier !== 'number' || gameState.vpnTier < 0) return 0;
+  const idx = Math.min(gameState.vpnTier, vpnPenaltyTiers.length - 1);
+  return vpnPenaltyTiers[idx];
+}
+
+function computePageLoadMeta(displayLabel = null) {
+  const profile = getWifiLoadProfile();
+  const base = randomBetween(profile.min, profile.max);
+  const vpnPenalty = getVpnPenaltyMs();
+  const duration = Math.round(base + vpnPenalty);
+  const wifiLabel = gameState.currentNetwork?.ssid || 'Offline';
+  const vpnLabel = vpnPenalty > 0 ? ` · VPN +${(vpnPenalty / 1000).toFixed(1)}s` : '';
+  const detailSuffix = ` · ${(duration / 1000).toFixed(1)}s${vpnLabel}`;
+  return {
+    duration,
+    label: `${displayLabel || wifiLabel}${detailSuffix}`,
+  };
+}
 const desktop = document.getElementById("desktop");
 const iconButtons = document.querySelectorAll(".desktop-icon");
 const startButton = document.querySelector(".start-button");
@@ -23,6 +47,77 @@ const togglePasswordBtn = document.getElementById("toggle-password");
 const TARGET_PASSWORD = "EndTheGame"; // The password that will be auto-typed
 let passwordIndex = 0;
 
+// --- Audio Manager ---
+const audioManager = (() => {
+  const makeSound = (src, { loop = false, volume = 1, oneShot = false } = {}) => {
+    const el = new Audio(src);
+    el.loop = loop;
+    el.volume = volume;
+    return { el, baseVolume: volume, src, oneShot };
+  };
+
+  // Small pool for keyboard to avoid stutter and still allow rapid presses
+  const keyboardPool = Array.from({ length: 3 }, () => new Audio("fx/keyboard-type.wav"));
+  keyboardPool.forEach(a => { a.volume = 0.7; });
+  let keyboardIndex = 0;
+
+  const sounds = {
+    ambiance: makeSound("fx/ambiance.wav", { loop: true, volume: 0.45 }),
+    keyboard: makeSound("fx/keyboard-type.wav", { loop: false, volume: 0.7, oneShot: false }),
+    mouseClick: makeSound("fx/mouse-click.flac", { loop: false, volume: 0.7 }),
+    notification: makeSound("fx/notification.wav", { loop: false, volume: 0.9 }),
+    pcStart: makeSound("fx/pc-start.wav", { loop: true, volume: 0.7 }),
+    systemLogin: makeSound("fx/system-login.wav", { loop: false, volume: 0.8 }),
+  };
+
+  let masterVolume = 1;
+
+  const applyVolume = () => {
+    Object.values(sounds).forEach((s) => {
+      s.el.volume = (s.baseVolume ?? 1) * masterVolume;
+    });
+    keyboardPool.forEach(a => { a.volume = 0.7 * masterVolume; });
+  };
+
+  const setVolume = (val) => {
+    masterVolume = Math.max(0, Math.min(1, val));
+    applyVolume();
+  };
+
+  const play = (name, { restart = true, loop } = {}) => {
+    const sound = sounds[name];
+    if (!sound) return;
+    if (name === "keyboard") {
+      const a = keyboardPool[keyboardIndex];
+      keyboardIndex = (keyboardIndex + 1) % keyboardPool.length;
+      try {
+        a.currentTime = 0;
+        a.play().catch(() => {});
+      } catch (e) {}
+      return;
+    }
+    if (sound.oneShot && !sound.el.loop) {
+      const shot = new Audio(sound.src);
+      shot.volume = (sound.baseVolume ?? 1) * masterVolume;
+      shot.play().catch(() => {});
+      return;
+    }
+    if (typeof loop === "boolean") sound.el.loop = loop;
+    if (restart) sound.el.currentTime = 0;
+    sound.el.volume = (sound.baseVolume ?? 1) * masterVolume;
+    sound.el.play().catch(() => {});
+  };
+
+  const stop = (name, { reset = true } = {}) => {
+    const sound = sounds[name];
+    if (!sound) return;
+    sound.el.pause();
+    if (reset) sound.el.currentTime = 0;
+  };
+
+  return { play, stop, setVolume };
+})();
+
 if (togglePasswordBtn && loginPassword) {
   togglePasswordBtn.addEventListener("click", () => {
     const type = loginPassword.getAttribute("type") === "password" ? "text" : "password";
@@ -39,6 +134,7 @@ if (powerBtn) {
     
     // Fade out power screen
     powerScreen.style.opacity = "0";
+    audioManager.play("pcStart", { restart: true, loop: true });
     
     setTimeout(() => {
       powerScreen.style.display = "none";
@@ -47,8 +143,20 @@ if (powerBtn) {
   });
 }
 
-// Developer Reset Button
+// Developer utilities
 const devResetBtn = document.getElementById("dev-reset-btn");
+const devStopThreatsBtn = document.getElementById("dev-stop-threats") || (() => {
+  if (!devResetBtn || !devResetBtn.parentElement) return null;
+  const btn = document.createElement('button');
+  btn.id = 'dev-stop-threats';
+  btn.textContent = 'Stop threats';
+  btn.style.marginLeft = '8px';
+  devResetBtn.parentElement.appendChild(btn);
+  return btn;
+})();
+const devTriggerBreatherBtn = document.getElementById('dev-trigger-breather');
+const devTriggerKidnapperBtn = document.getElementById('dev-trigger-kidnapper');
+
 if (devResetBtn) {
   devResetBtn.addEventListener("click", (e) => {
     e.stopPropagation(); // Prevent triggering power button if nested (though it's not)
@@ -60,9 +168,55 @@ if (devResetBtn) {
   });
 }
 
+function stopAllThreats() {
+  // Reset threat state and clear overlays
+  threatLevel = 0;
+  gameState.isKidnapperActive = false;
+  gameState.isBreatherActive = false;
+  const overlay = document.getElementById('popupLayer');
+  if (overlay) {
+    overlay.innerHTML = '';
+    overlay.style.pointerEvents = 'none';
+  }
+  const threatOverlay = document.getElementById('threatOverlay');
+  if (threatOverlay) threatOverlay.innerHTML = '';
+  if (threatInterval) {
+    clearInterval(threatInterval);
+    threatInterval = null;
+  }
+  checkThreats();
+  updateStatusBar();
+  // restart passive ticker at zero
+  startThreatSystem();
+}
+
+if (devStopThreatsBtn) {
+  devStopThreatsBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    stopAllThreats();
+  });
+}
+
+if (devTriggerBreatherBtn) {
+  devTriggerBreatherBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    triggerBreather();
+  });
+}
+
+if (devTriggerKidnapperBtn) {
+  devTriggerKidnapperBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    triggerKidnapper();
+  });
+}
+
+
 function attemptLogin() {
   if (passwordIndex === TARGET_PASSWORD.length) {
     loginStatus.textContent = "Authenticating...";
+    audioManager.stop("pcStart");
+    audioManager.play("systemLogin", { restart: true });
     setTimeout(() => {
       loginStatus.textContent = "Access Granted";
       loginStatus.style.color = "#0f0";
@@ -114,10 +268,12 @@ if (loginPassword) {
 }
 
 function enterDesktop() {
+  audioManager.stop("pcStart");
   loginScreen.style.opacity = "0";
   setTimeout(() => {
     loginScreen.style.display = "none";
     desktopScreen.style.display = "block";
+    audioManager.play("ambiance", { restart: true, loop: true });
     // Initialize any desktop stuff if needed
     if (gameState.chatStep === 0 && gameState.chatHistory.length === 0) {
       setTimeout(showNotification, 2000); // Show notification only if story hasn't started
@@ -129,6 +285,235 @@ const state = {
   zIndex: 10,
   windows: new Map(),
 };
+
+// Editable list of 20 custom links. Update the `html` field of any entry to change
+// what gets rendered when the link opens inside the in-game window.
+const customLinkPages = [
+  {
+    id: 'relay-alpha',
+    address: 'relay-alpha45q.onion/entry',
+    title: 'Relay Alpha',
+    html: `
+      <div class="custom-page">
+        <h2>Relay Alpha</h2>
+        <p>Edit <code>customLinkPages</code> in <code>script.js</code> to change this content.</p>
+      </div>
+    `,
+  },
+  {
+    id: 'relay-beta',
+    address: 'relay-beta91c.onion/core',
+    title: 'Relay Beta',
+    html: `
+      <div class="custom-page">
+        <h2>Relay Beta</h2>
+        <p>Place any HTML fragment you need here.</p>
+      </div>
+    `,
+  },
+  {
+    id: 'relay-gamma',
+    address: 'relay-gamma52k.onion/logs',
+    title: 'Relay Gamma',
+    html: `
+      <div class="custom-page">
+        <h2>Relay Gamma</h2>
+        <p>Use inline media, tables, or custom styling.</p>
+      </div>
+    `,
+  },
+  {
+    id: 'relay-delta',
+    address: 'relay-delta13v.onion/vault',
+    title: 'Relay Delta',
+    html: `
+      <div class="custom-page">
+        <h2>Relay Delta</h2>
+        <p>Supports arbitrary HTML markup.</p>
+      </div>
+    `,
+  },
+  {
+    id: 'relay-epsilon',
+    address: 'relay-epsilon74p.onion/cache',
+    title: 'Relay Epsilon',
+    html: `
+      <div class="custom-page">
+        <h2>Relay Epsilon</h2>
+        <p>Embed story beats, logs, or puzzles here.</p>
+      </div>
+    `,
+  },
+  {
+    id: 'relay-zeta',
+    address: 'relay-zeta06n.onion/terminal',
+    title: 'Relay Zeta',
+    html: `
+      <div class="custom-page">
+        <h2>Relay Zeta</h2>
+        <p>Feel free to swap this snippet for your own.</p>
+      </div>
+    `,
+  },
+  {
+    id: 'relay-eta',
+    address: 'relay-eta84g.onion/stack',
+    title: 'Relay Eta',
+    html: `
+      <div class="custom-page">
+        <h2>Relay Eta</h2>
+        <p>HTML blocks can include forms, lists, etc.</p>
+      </div>
+    `,
+  },
+  {
+    id: 'relay-theta',
+    address: 'relay-theta71s.onion/grid',
+    title: 'Relay Theta',
+    html: `
+      <div class="custom-page">
+        <h2>Relay Theta</h2>
+        <p>This is placeholder content; replace as needed.</p>
+      </div>
+    `,
+  },
+  {
+    id: 'relay-iota',
+    address: 'relay-iota20x.onion/trace',
+    title: 'Relay Iota',
+    html: `
+      <div class="custom-page">
+        <h2>Relay Iota</h2>
+        <p>Use semantic tags like <strong>, <em>, or <code>code</code>.</p>
+      </div>
+    `,
+  },
+  {
+    id: 'relay-kappa',
+    address: 'relay-kappa67b.onion/cache',
+    title: 'Relay Kappa',
+    html: `
+      <div class="custom-page">
+        <h2>Relay Kappa</h2>
+        <p>Keep styling inline or rely on global CSS.</p>
+      </div>
+    `,
+  },
+  {
+    id: 'relay-lambda',
+    address: 'relay-lambda58t.onion/shell',
+    title: 'Relay Lambda',
+    html: `
+      <div class="custom-page">
+        <h2>Relay Lambda</h2>
+        <p>Snippets can include game clues.</p>
+      </div>
+    `,
+  },
+  {
+    id: 'relay-mu',
+    address: 'relay-mu93q.onion/archive',
+    title: 'Relay Mu',
+    html: `
+      <div class="custom-page">
+        <h2>Relay Mu</h2>
+        <p>Insert imagery via &lt;img&gt; tags if desired.</p>
+      </div>
+    `,
+  },
+  {
+    id: 'relay-nu',
+    address: 'relay-nu39d.onion/hub',
+    title: 'Relay Nu',
+    html: `
+      <div class="custom-page">
+        <h2>Relay Nu</h2>
+        <p>Perfect for mission briefings or lore.</p>
+      </div>
+    `,
+  },
+  {
+    id: 'relay-xi',
+    address: 'relay-xi18m.onion/ops',
+    title: 'Relay Xi',
+    html: `
+      <div class="custom-page">
+        <h2>Relay Xi</h2>
+        <p>Supports lists:</p>
+        <ul>
+          <li>Step one</li>
+          <li>Step two</li>
+        </ul>
+      </div>
+    `,
+  },
+  {
+    id: 'relay-omicron',
+    address: 'relay-omicron24j.onion/failsafe',
+    title: 'Relay Omicron',
+    html: `
+      <div class="custom-page">
+        <h2>Relay Omicron</h2>
+        <p>Drop encoded text or riddles here.</p>
+      </div>
+    `,
+  },
+  {
+    id: 'relay-pi',
+    address: 'relay-pi10f.onion/safehouse',
+    title: 'Relay Pi',
+    html: `
+      <div class="custom-page">
+        <h2>Relay Pi</h2>
+        <p>Great for NPC chat transcripts.</p>
+      </div>
+    `,
+  },
+  {
+    id: 'relay-rho',
+    address: 'relay-rho77y.onion/ledger',
+    title: 'Relay Rho',
+    html: `
+      <div class="custom-page">
+        <h2>Relay Rho</h2>
+        <p>Placeholder ledger UI. Replace freely.</p>
+      </div>
+    `,
+  },
+  {
+    id: 'relay-sigma',
+    address: 'relay-sigma04c.onion/cortex',
+    title: 'Relay Sigma',
+    html: `
+      <div class="custom-page">
+        <h2>Relay Sigma</h2>
+        <p>Add SVGs, charts, or other widgets.</p>
+      </div>
+    `,
+  },
+  {
+    id: 'relay-tau',
+    address: 'relay-tau63l.onion/keys',
+    title: 'Relay Tau',
+    html: `
+      <div class="custom-page">
+        <h2>Relay Tau</h2>
+        <p>Use this slot for key fragments.</p>
+      </div>
+    `,
+  },
+  {
+    id: 'relay-upsilon',
+    address: 'relay-upsilon82w.onion/omega',
+    title: 'Relay Upsilon',
+    html: `
+      <div class="custom-page">
+        <h2>Relay Upsilon</h2>
+        <p>Final placeholder link. Customize as needed.</p>
+      </div>
+    `,
+  }
+];
 
 const apps = {
   chat: {
@@ -243,81 +628,188 @@ const hiddenApps = {
   browser: {
     title: "Deep Web Browser",
     icon: "⬤",
-    render: (container) => {
-      container.innerHTML = `
-        <section class="browser-shell">
-          <div class="browser-chrome">
-            <div class="chrome-tabs">
-              <div class="chrome-tab active">
-                <span class="tab-icon">🧅</span>
-                <span class="tab-title">New Tab</span>
-                <span class="tab-close">×</span>
+      render: (container, options = {}) => {
+        const embedded = options.embedded === true;
+        const startPage = options.startPage || 'about:tor';
+        if (!embedded) {
+          container.innerHTML = `
+            <section class="browser-shell">
+              <div class="browser-chrome">
+                <div class="chrome-tabs">
+                  <div class="chrome-tab active">
+                    <span class="tab-icon">🧅</span>
+                    <span class="tab-title">New Tab</span>
+                    <span class="tab-close">×</span>
+                  </div>
+                  <div class="chrome-tab-add">+</div>
+                </div>
+                <div class="chrome-toolbar">
+                  <div class="chrome-nav-controls">
+                    <button class="chrome-btn" id="nav-back" aria-label="Zpět">←</button>
+                    <button class="chrome-btn" id="nav-forward" aria-label="Vpřed">→</button>
+                    <button class="chrome-btn" id="nav-refresh" aria-label="Obnovit">⟳</button>
+                  </div>
+                  <div class="chrome-address-bar">
+                    <span class="onion-icon">🧅</span>
+                    <input id="address-bar" type="text" value="about:tor" spellcheck="false" aria-label="Adresa" />
+                    <div class="chrome-loading" data-role="loading">
+                      <div class="chrome-loading__fill" data-role="loading-fill"></div>
+                      <span class="chrome-loading__label" data-role="loading-label">Connecting...</span>
+                    </div>
+                    <button class="chrome-btn" id="nav-go">➤</button>
+                  </div>
+                  <div class="chrome-menu-btn">≡</div>
+                </div>
               </div>
-              <div class="chrome-tab-add">+</div>
-            </div>
-            <div class="chrome-toolbar">
-              <div class="chrome-nav-controls">
-                <button class="chrome-btn" id="nav-back" aria-label="Zpět">←</button>
-                <button class="chrome-btn" id="nav-forward" aria-label="Vpřed">→</button>
-                <button class="chrome-btn" id="nav-refresh" aria-label="Obnovit">⟳</button>
-              </div>
-              <div class="chrome-address-bar">
+              <div class="browser-main" id="browser-main"></div>
+            </section>
+          `;
+        } else {
+          // Embedded: render a compact address bar + main area so it fits inside Tor Client
+          container.innerHTML = `
+            <div class="embedded-browser">
+              <div class="embedded-address">
                 <span class="onion-icon">🧅</span>
                 <input id="address-bar" type="text" value="about:tor" spellcheck="false" aria-label="Adresa" />
+                <div class="chrome-loading" data-role="loading">
+                  <div class="chrome-loading__fill" data-role="loading-fill"></div>
+                  <span class="chrome-loading__label" data-role="loading-label">Connecting...</span>
+                </div>
                 <button class="chrome-btn" id="nav-go">➤</button>
               </div>
-              <div class="chrome-menu-btn">≡</div>
+              <div class="browser-main" id="browser-main"></div>
             </div>
-          </div>
-          <div class="browser-main" id="browser-main"></div>
-        </section>
-      `;
-
-      const view = container.querySelector('#browser-main');
-      const addressBar = container.querySelector('#address-bar');
-      const backBtn = container.querySelector('#nav-back');
-      const fwdBtn = container.querySelector('#nav-forward');
-      const refreshBtn = container.querySelector('#nav-refresh');
-      const goBtn = container.querySelector('#nav-go');
-      const tabTitle = container.querySelector('.tab-title');
-
-      const browserState = {
-        history: [],
-        index: -1,
-      };
-
-      const pushHistory = (pageId) => {
-        if (browserState.index < browserState.history.length - 1) {
-          browserState.history = browserState.history.slice(0, browserState.index + 1);
+          `;
         }
-        browserState.history.push(pageId);
-        browserState.index = browserState.history.length - 1;
-        updateNavButtons();
-      };
 
-      const updateNavButtons = () => {
-        backBtn.disabled = browserState.index <= 0;
-        fwdBtn.disabled = browserState.index >= browserState.history.length - 1;
-      };
+        const view = container.querySelector('#browser-main');
+        const addressBar = container.querySelector('#address-bar');
+        const backBtn = container.querySelector('#nav-back');
+        const fwdBtn = container.querySelector('#nav-forward');
+        const refreshBtn = container.querySelector('#nav-refresh');
+        const goBtn = container.querySelector('#nav-go');
+        const tabTitle = container.querySelector('.tab-title');
+        const loadingOverlay = container.querySelector('[data-role="loading"]');
+        const loadingFill = container.querySelector('[data-role="loading-fill"]');
+        const loadingLabel = container.querySelector('[data-role="loading-label"]');
 
-      const goTo = (pageId, push = true) => {
-        const resolved = resolvePage(pageId);
-        renderPage(resolved);
-        if (push) pushHistory(resolved);
-        addressBar.value = resolved;
-        gameState.currentPage = resolved;
-        checkThreats();
-        
-        // Update tab title
-        const page = deepSearchPages[resolved];
-        if (page) {
-            tabTitle.textContent = page.title || "New Tab";
-        } else if (resolved === 'about:tor') {
-            tabTitle.textContent = "Connect to Tor";
-        } else {
-            tabTitle.textContent = resolved;
-        }
-      };
+        const browserState = {
+          history: [],
+          index: -1,
+          loadingTimer: null,
+          isLoading: false,
+        };
+
+        const pushHistory = (pageId) => {
+          if (browserState.index < browserState.history.length - 1) {
+            browserState.history = browserState.history.slice(0, browserState.index + 1);
+          }
+          browserState.history.push(pageId);
+          browserState.index = browserState.history.length - 1;
+          if (!embedded) updateNavButtons();
+        };
+
+        const updateNavButtons = () => {
+          if (!backBtn || !fwdBtn) return;
+          backBtn.disabled = browserState.index <= 0;
+          fwdBtn.disabled = browserState.index >= browserState.history.length - 1;
+        };
+        const setControlsDisabled = (disabled) => {
+          if (addressBar) addressBar.disabled = disabled;
+          if (goBtn) goBtn.disabled = disabled;
+          if (refreshBtn) refreshBtn.disabled = disabled;
+          if (disabled) {
+            if (backBtn) backBtn.disabled = true;
+            if (fwdBtn) fwdBtn.disabled = true;
+          } else {
+            updateNavButtons();
+          }
+        };
+
+        const getLoadingLabel = (target) => {
+          if (!target) return 'Loading';
+          if (target === 'about:tor') return 'Tor Browser';
+          const page = deepSearchPages[target];
+          if (!page) return target;
+          return page.title || page.label || target;
+        };
+
+        const showLoadingUI = (label, duration) => {
+          if (!loadingOverlay || !loadingFill) return;
+          loadingOverlay.classList.add('active');
+          if (loadingLabel) loadingLabel.textContent = label;
+          loadingFill.style.transition = 'none';
+          loadingFill.style.width = '0%';
+          loadingFill.getBoundingClientRect();
+          loadingFill.style.transition = `width ${duration}ms linear`;
+          loadingFill.style.width = '100%';
+        };
+
+        const hideLoadingUI = () => {
+          if (!loadingOverlay || !loadingFill) return;
+          loadingOverlay.classList.remove('active');
+          loadingFill.style.transition = 'none';
+          loadingFill.style.width = '0%';
+        };
+
+        const finishNavigation = (target, options = {}) => {
+          if (!view || !view.isConnected) {
+            hideLoadingUI();
+            setControlsDisabled(false);
+            return;
+          }
+          renderPage(target);
+          if (addressBar) addressBar.value = target;
+          gameState.currentPage = target;
+          checkThreats();
+          const page = deepSearchPages[target];
+          if (tabTitle && page) tabTitle.textContent = page.title || 'New Tab';
+          if (options.pushHistory) {
+            pushHistory(target);
+          } else if (options.replaceHistory && browserState.index >= 0) {
+            browserState.history[browserState.index] = target;
+          }
+          hideLoadingUI();
+          setControlsDisabled(false);
+        };
+
+        const startPageLoad = (target, options = {}) => {
+          if (!target) return;
+          if (browserState.loadingTimer) {
+            clearTimeout(browserState.loadingTimer);
+            browserState.loadingTimer = null;
+          }
+          const pushHistoryFlag = options.pushHistory ?? false;
+          const replaceHistoryFlag = options.replaceHistory ?? false;
+
+          if (target === 'about:tor') {
+            browserState.isLoading = false;
+            finishNavigation(target, {
+              pushHistory: pushHistoryFlag,
+              replaceHistory: replaceHistoryFlag,
+            });
+            return;
+          }
+
+          browserState.isLoading = true;
+          setControlsDisabled(true);
+          const meta = computePageLoadMeta(getLoadingLabel(target));
+          showLoadingUI(meta.label, meta.duration);
+          browserState.loadingTimer = setTimeout(() => {
+            browserState.loadingTimer = null;
+            browserState.isLoading = false;
+            finishNavigation(target, {
+              pushHistory: pushHistoryFlag,
+              replaceHistory: replaceHistoryFlag,
+            });
+          }, meta.duration);
+        };
+
+        const goTo = (pageId, push = true) => {
+          const resolved = resolvePage(pageId);
+          if (addressBar) addressBar.value = resolved;
+          startPageLoad(resolved, { pushHistory: push });
+        };
 
       const resolvePage = (input) => {
         if (!input) return 'about:tor';
@@ -331,19 +823,14 @@ const hiddenApps = {
       const renderPage = (pageId) => {
         // Check Tor connection first
         if (!gameState.torRunning) {
-             view.innerHTML = renderTorConnect();
-             const connectBtn = view.querySelector('#tor-connect-btn');
-             if (connectBtn) {
-                 connectBtn.addEventListener('click', () => {
-                     connectBtn.disabled = true;
-                     connectBtn.textContent = "Connecting...";
-                     setTimeout(() => {
-                         gameState.torRunning = true;
-                         incrementAlerts('Tor Connected');
-                         goTo('about:tor');
-                     }, 2000);
-                 });
-             }
+               // When Tor is not running, show a passive message: connecting must be done via system Wi‑Fi
+               view.innerHTML = `
+                 <div class="tor-connect-screen">
+                     <div class="tor-logo-large">🧅</div>
+                     <h2>Connect to Tor</h2>
+                     <p>Tor Browser requires an active network connection. Use the system Wi‑Fi panel to connect your machine.</p>
+                 </div>
+               `;
              return;
         }
 
@@ -427,6 +914,15 @@ const hiddenApps = {
           }
           return;
         }
+
+        if (page.type === 'custom') {
+          view.innerHTML = `
+            <div class="custom-link-page">
+              ${page.html}
+            </div>
+          `;
+          return;
+        }
       };
 
       const renderTorConnect = () => {
@@ -469,128 +965,427 @@ const hiddenApps = {
       };
 
       backBtn.addEventListener('click', () => {
-        if (browserState.index <= 0) return;
+        if (browserState.index <= 0 || browserState.isLoading) return;
         browserState.index -= 1;
         const target = browserState.history[browserState.index];
-        renderPage(target);
-        addressBar.value = target;
-        updateNavButtons();
+        startPageLoad(target, { pushHistory: false });
       });
 
       fwdBtn.addEventListener('click', () => {
-        if (browserState.index >= browserState.history.length - 1) return;
+        if (browserState.index >= browserState.history.length - 1 || browserState.isLoading) return;
         browserState.index += 1;
         const target = browserState.history[browserState.index];
-        renderPage(target);
-        addressBar.value = target;
-        updateNavButtons();
+        startPageLoad(target, { pushHistory: false });
       });
 
       refreshBtn.addEventListener('click', () => {
-        if (browserState.index < 0) return;
+        if (browserState.index < 0 || browserState.isLoading) return;
         const target = browserState.history[browserState.index];
-        renderPage(target);
+        startPageLoad(target, { pushHistory: false, replaceHistory: false });
       });
 
-      goBtn.addEventListener('click', () => goTo(addressBar.value));
+      goBtn.addEventListener('click', () => {
+        if (browserState.isLoading) return;
+        goTo(addressBar.value);
+      });
       addressBar.addEventListener('keydown', (event) => {
-        if (event.key === 'Enter') goTo(addressBar.value);
+        if (event.key === 'Enter') {
+          if (browserState.isLoading) return;
+          goTo(addressBar.value);
+        }
       });
 
       // initial render
-      goTo('about:tor');
+      const initialTarget = window.__pendingBrowserTarget || startPage || 'about:tor';
+      try { goTo(initialTarget); } catch (e) { goTo('about:tor'); }
+      window.__pendingBrowserTarget = null;
     },
   },
   tor: {
     title: "Tor Client",
     icon: "🧅",
     render: (container) => {
-      // Redirect to browser if Tor is "running" (simplified for game flow)
-      // Or keep it as a settings panel. Let's keep it simple as a status panel.
+      // If Tor is running, show embedded browser directly (replace homepage)
+      if (gameState.torRunning) {
+        container.innerHTML = `<div class="tor-browser-host" id="tor-browser-host"></div>`;
+        const host = container.querySelector('#tor-browser-host');
+        if (!apps.browser || typeof apps.browser.render !== 'function') {
+          host.innerHTML = `<div class="tor-connect-screen"><h2>Browser component missing</h2><p>Restart or reinstall Tor Client.</p></div>`;
+        } else if (host) {
+          try {
+            host.innerHTML = '';
+            const target = gameState.currentPage || 'about:tor';
+            // render full browser chrome to match classic Tor look
+            apps.browser.render(host, { embedded: false, startPage: target });
+          } catch (e) {
+            console.error('Embedded browser render failed:', e);
+            host.innerHTML = `<div class="tor-connect-screen"><h2>Tor Browser error</h2><p>Restart the window.</p></div>`;
+          }
+        }
+        return;
+      }
+
+      // Not running: show status panel only. Player must connect using the system Wi‑Fi.
       container.innerHTML = `
         <section class="tor-settings">
           <h2>Tor Network Settings</h2>
           <div class="tor-status-panel">
              <div class="status-row">
                 <span>Status:</span>
-                <span style="color: ${gameState.torRunning ? '#0f0' : '#f00'}">${gameState.torRunning ? 'Connected' : 'Disconnected'}</span>
+                <span style="color: #f00">Disconnected</span>
              </div>
              <div class="status-row">
                 <span>Circuit:</span>
-                <span>${gameState.torRunning ? 'Relay (France) -> Relay (Germany) -> Relay (Unknown)' : 'None'}</span>
+                <span>None</span>
              </div>
              <div class="status-row">
                 <span>Bridge:</span>
                 <span>obfs4 (recommended)</span>
              </div>
           </div>
-          <p style="margin-top: 20px; font-size: 0.9rem; color: #aaa;">
-            Tor protects your privacy by routing your traffic through a network of relays.
-          </p>
+          <p style="margin-top: 20px; font-size: 0.9rem; color: #aaa;">You must connect to a network using the system Wi‑Fi panel. The Tor Client cannot initiate system network connections.</p>
         </section>
       `;
     },
   },
+  links: {
+    title: "links.pdf",
+    icon: "📄",
+    render: (container) => {
+      const textDump = customLinkPages
+        .map(link => `${link.address} — ${link.title}`)
+        .join('\n');
+      container.innerHTML = `
+        <section class="notes-area links-area">
+          <div class="links-header">
+            <div>
+              <div class="links-title">Custom Nodes</div>
+              <div class="links-sub">Jen textový výpis. Zadej adresu ručně do Tor klienta.</div>
+            </div>
+          </div>
+          <textarea class="links-textarea" readonly spellcheck="false">${textDump}</textarea>
+        </section>
+      `;
+    }
+  },
+  dosmarket: {
+    title: "DOSMarket",
+    icon: "₿",
+    render: (container) => {
+      container.innerHTML = `
+        <section class="market-app">
+          <header class="market-header">
+            <div class="market-title">DOSMarket</div>
+            <div class="market-balance">Balance: <strong>${gameState.dosCoin} DOS</strong></div>
+          </header>
+          <div class="market-body">
+            <p class="market-status">${gameState.torRunning ? 'Connected to Tor.' : 'Tor required.'}</p>
+            <div class="market-grid">
+              <article class="market-card">
+                <h4>Techno Archives</h4>
+                <p>Archivované dumpy s klíči. Potřebuje ověřený okruh.</p>
+                <button class="wizard-btn secondary" disabled>Locked</button>
+              </article>
+              <article class="market-card">
+                <h4>Signal Dumps</h4>
+                <p>Nahrané logy z relays. Možné útržky čísel.</p>
+                <button class="wizard-btn secondary" disabled>Locked</button>
+              </article>
+              <article class="market-card">
+                <h4>Hardware Keys</h4>
+                <p>Zabezpečené tokeny. Dočasně nedostupné.</p>
+                <button class="wizard-btn secondary" disabled>Offline</button>
+              </article>
+            </div>
+          </div>
+        </section>
+      `;
+    }
+  },
 };
 
-function installTor() {
+function ensureAppDefinition(key) {
+  if (!apps[key] && hiddenApps[key]) {
+    apps[key] = hiddenApps[key];
+  }
+}
+
+function ensureDesktopIcon(appKey, iconSymbol, label) {
+  const iconGrid = desktop?.querySelector(".icon-grid");
+  if (!iconGrid || iconGrid.querySelector(`[data-app="${appKey}"]`)) return;
+  const btn = document.createElement("button");
+  btn.className = "desktop-icon";
+  btn.dataset.app = appKey;
+  btn.innerHTML = `
+    <span class="icon-symbol">${iconSymbol}</span>
+    <span class="icon-label">${label}</span>
+  `;
+  btn.addEventListener("dblclick", () => openApp(appKey));
+  btn.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") openApp(appKey);
+  });
+  iconGrid.appendChild(btn);
+}
+
+let torInstalling = false;
+
+function showLinksPdf() {
+  if (!gameState.linksInstalled) installLinksApp();
+  try {
+    openApp('links');
+  } catch (e) {
+    console.error('Failed to open links app', e);
+  }
+}
+
+function installDosMarket() {
+  if (gameState.dosMarketInstalled) {
+    ensureAppDefinition('dosmarket');
+    ensureDesktopIcon('dosmarket', '₿', 'DOSMarket');
+    alert('DOSMarket už je nainstalovaný.');
+    openApp('dosmarket');
+    return;
+  }
+
   const overlay = document.getElementById('popupLayer');
   const box = document.createElement('div');
   box.className = 'door-popup';
-  box.innerHTML = `
-    <div>
-      <strong>Instalace Tor Client</strong>
-      <p>Probíhá instalace...</p>
-      <div style="height:10px;background:#222;border-radius:8px;margin-top:8px;">
-        <div id="install-fill" style="height:10px;background:lime;width:0%;border-radius:8px;"></div>
+
+  const steps = [
+    { title: 'DOSMarket Setup', body: 'Installer připravuje prostředí.', primary: 'Další' },
+    { title: 'Stažení balíčku', body: '<div class="install-bar"><div class="install-fill" id="dos-install-fill" style="width:0%"></div></div><p style="margin-top:8px;">Stahuji komponenty...</p>', primary: 'Čekej', installing: true },
+    { title: 'Hotovo', body: 'DOSMarket byl nainstalován. Najdeš ho na ploše i ve Start menu.', primary: 'Zavřít', done: true }
+  ];
+
+  let stepIndex = 0;
+  let progressTimer = null;
+
+  const renderStep = () => {
+    const step = steps[stepIndex];
+    box.innerHTML = `
+      <div class="wizard">
+        <div class="wizard-header">${step.title}</div>
+        <div class="wizard-body">${step.body}</div>
+        <div class="wizard-actions">
+          <button class="wizard-btn secondary" id="dos-cancel">Zrušit</button>
+          <div class="spacer"></div>
+          <button class="wizard-btn primary" id="dos-next">${step.primary}</button>
+        </div>
       </div>
-    </div>
-  `;
+    `;
+    attachHandlers(step);
+  };
+
+  const finishInstall = () => {
+    ensureAppDefinition('dosmarket');
+    gameState.dosMarketInstalled = true;
+    renderStartMenu();
+    ensureDesktopIcon('dosmarket', '₿', 'DOSMarket');
+  };
+
+  const startProgress = () => {
+    const fill = box.querySelector('#dos-install-fill');
+    let progress = 0;
+    progressTimer = setInterval(() => {
+      progress += Math.random() * 18 + 7;
+      if (progress > 100) progress = 100;
+      if (fill) fill.style.width = `${progress}%`;
+      if (progress >= 100) {
+        clearInterval(progressTimer);
+        progressTimer = null;
+        stepIndex = steps.length - 1;
+        finishInstall();
+        renderStep();
+          try { openApp('dosmarket'); } catch (e) { console.error(e); }
+      }
+    }, 260);
+  };
+
+  const handleNext = (step) => {
+    if (step.installing && !progressTimer) {
+      startProgress();
+      return;
+    }
+    if (step.installing && progressTimer) return;
+    if (step.done) {
+      closeWizard();
+      return;
+    }
+    stepIndex = Math.min(stepIndex + 1, steps.length - 1);
+    renderStep();
+  };
+
+  const closeWizard = () => {
+    if (progressTimer) clearInterval(progressTimer);
+    box.remove();
+    overlay.style.pointerEvents = 'none';
+  };
+
+  const attachHandlers = (step) => {
+    const btnNext = box.querySelector('#dos-next');
+    const btnCancel = box.querySelector('#dos-cancel');
+    btnNext?.addEventListener('click', () => handleNext(step));
+    btnCancel?.addEventListener('click', () => closeWizard());
+    if (step.installing && !progressTimer) startProgress();
+  };
+
   overlay.appendChild(box);
   overlay.style.pointerEvents = 'auto';
+  renderStep();
+}
 
-  const fill = box.querySelector('#install-fill');
-  let progress = 0;
-  const iv = setInterval(() => {
-    progress += Math.random() * 15 + 5;
-    if (progress > 100) progress = 100;
-    fill.style.width = `${progress}%`;
-    
-    if (progress >= 100) {
-      clearInterval(iv);
-      setTimeout(() => {
-        box.remove();
-        overlay.style.pointerEvents = 'none';
-        
-        // Enable apps
-        apps.tor = hiddenApps.tor;
-        apps.browser = hiddenApps.browser;
-        gameState.torInstalled = true;
-        
-        // Render Start Menu
-        renderStartMenu();
-        
-        // Add Desktop Icon
-        const desktop = document.getElementById("desktop");
-        const iconGrid = desktop.querySelector(".icon-grid");
-        
-        const torBtn = document.createElement("button");
-        torBtn.className = "desktop-icon";
-        torBtn.dataset.app = "tor";
-        torBtn.innerHTML = `
-          <span class="icon-symbol">🧅</span>
-          <span class="icon-label">Tor Client</span>
-        `;
-        torBtn.addEventListener("dblclick", () => openApp("tor"));
-        torBtn.addEventListener("keydown", (e) => {
-          if (e.key === "Enter") openApp("tor");
-        });
-        iconGrid.appendChild(torBtn);
-        
-        showNotification("System", "Tor Client byl úspěšně nainstalován.");
-      }, 500);
+function installLinksApp() {
+  ensureAppDefinition('links');
+  if (!gameState.linksInstalled) {
+    gameState.linksInstalled = true;
+  }
+  renderStartMenu();
+  ensureDesktopIcon('links', '📄', 'links.pdf');
+
+  // Auto-open after install for chat flow
+  try { openApp('links'); } catch (e) { console.error(e); }
+}
+
+function installTor() {
+  if (gameState.torInstalled) {
+    alert('Tor Client už je nainstalovaný.');
+    return;
+  }
+  if (torInstalling) {
+    alert('Instalátor Toru už běží.');
+    return;
+  }
+  torInstalling = true;
+
+  const overlay = document.getElementById('popupLayer');
+  const box = document.createElement('div');
+  box.className = 'door-popup';
+
+  const steps = [
+    {
+      title: 'Tor Setup',
+      body: 'Vítej v instalačním průvodci. Pokračuj na další krok.',
+      primary: 'Další',
+    },
+    {
+      title: 'Licence',
+      body: 'Kliknutím na "Instalovat" souhlasíš s instalací Tor Clientu.',
+      primary: 'Instalovat',
+    },
+    {
+      title: 'Instalace probíhá',
+      body: '<div class="install-bar"><div class="install-fill" id="install-fill" style="width:0%"></div></div><p style="margin-top:8px;">Kopíruji soubory...</p>',
+      primary: 'Dokončit',
+      installing: true,
+    },
+    {
+      title: 'Hotovo',
+      body: 'Tor Client byl nainstalován. Najdeš ho na ploše i ve Start menu.',
+      primary: 'Zavřít',
+      done: true,
     }
-  }, 300);
+  ];
+
+  let stepIndex = 0;
+  let progressTimer = null;
+
+  const renderStep = () => {
+    const step = steps[stepIndex];
+    box.innerHTML = `
+      <div class="wizard">
+        <div class="wizard-header">${step.title}</div>
+        <div class="wizard-body">${step.body}</div>
+        <div class="wizard-actions">
+          <button class="wizard-btn secondary" id="wiz-cancel">Zrušit</button>
+          <div class="spacer"></div>
+          <button class="wizard-btn primary" id="wiz-next">${step.primary}</button>
+        </div>
+      </div>
+    `;
+    attachHandlers(step);
+  };
+
+  const finishInstall = () => {
+    // Enable apps
+    apps.tor = hiddenApps.tor;
+    apps.browser = hiddenApps.browser;
+    gameState.torInstalled = true;
+
+    renderStartMenu();
+
+    const desktop = document.getElementById("desktop");
+    const iconGrid = desktop.querySelector(".icon-grid");
+    const exists = iconGrid.querySelector('[data-app="tor"]');
+    if (!exists) {
+      const torBtn = document.createElement("button");
+      torBtn.className = "desktop-icon";
+      torBtn.dataset.app = "tor";
+      torBtn.innerHTML = `
+        <span class="icon-symbol">🧅</span>
+        <span class="icon-label">Tor Client</span>
+      `;
+      torBtn.addEventListener("dblclick", () => openApp("tor"));
+      torBtn.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") openApp("tor");
+      });
+      iconGrid.appendChild(torBtn);
+    }
+
+  };
+
+  const startProgress = () => {
+    const fill = box.querySelector('#install-fill');
+    let progress = 0;
+    progressTimer = setInterval(() => {
+      progress += Math.random() * 18 + 7;
+      if (progress > 100) progress = 100;
+      if (fill) fill.style.width = `${progress}%`;
+      if (progress >= 100) {
+        clearInterval(progressTimer);
+        progressTimer = null;
+        stepIndex = steps.length - 1;
+        finishInstall();
+        renderStep();
+      }
+    }, 280);
+  };
+
+  const handleNext = (step) => {
+    if (step.installing && !progressTimer) {
+      startProgress();
+      return;
+    }
+    if (step.installing && progressTimer) {
+      return; // Wait for progress to finish
+    }
+    if (step.done) {
+      closeWizard();
+      return;
+    }
+    stepIndex = Math.min(stepIndex + 1, steps.length - 1);
+    renderStep();
+  };
+
+  const closeWizard = () => {
+    if (progressTimer) clearInterval(progressTimer);
+    box.remove();
+    overlay.style.pointerEvents = 'none';
+    torInstalling = false;
+  };
+
+  const attachHandlers = (step) => {
+    const btnNext = box.querySelector('#wiz-next');
+    const btnCancel = box.querySelector('#wiz-cancel');
+    btnNext?.addEventListener('click', () => handleNext(step));
+    btnCancel?.addEventListener('click', () => closeWizard());
+    if (step.installing && !progressTimer) {
+      startProgress();
+    }
+  };
+
+  overlay.appendChild(box);
+  overlay.style.pointerEvents = 'auto';
+  renderStep();
 }
 
 function getCanvasPos(event, canvas) {
@@ -618,8 +1413,13 @@ const defaultGameState = {
   currentPage: "about:tor",
   torInstalled: false,
   torRunning: false,
+  currentNetwork: null, // { ssid }
   numericKeyFound: false,
   alerts: 0,
+  dosMarketInstalled: false,
+  torBriefingSent: false,
+  linksInstalled: false,
+  vpnTier: -1,
   chatStep: 0,
   chatHistory: [],
   openApps: [], // Array of { key, minimized, x, y, zIndex }
@@ -635,6 +1435,10 @@ function loadSavedData() {
 
 const savedData = loadSavedData();
 let gameState = savedData ? { ...defaultGameState, ...savedData.gameState } : { ...defaultGameState };
+
+if (typeof gameState.vpnTier !== 'number') {
+  gameState.vpnTier = -1;
+}
 
 let shouldSave = true;
 
@@ -675,6 +1479,13 @@ const deepSearchPages = {
         description: "Jak deeppedia šifruje metadata (čti před vstupem)",
         chip: "guide",
         url: "deeppedia.onion/protocol",
+      },
+      {
+        id: "deeppedia://custom-nodes",
+        title: "Custom Nodes",
+        description: "Tvůj vlastní seznam relay uzlů",
+        chip: "custom",
+        url: "deeppedia.onion/custom-nodes",
       },
     ],
   },
@@ -751,6 +1562,36 @@ const deepSearchPages = {
   },
 };
 
+function injectCustomLinkPages() {
+  const directoryId = 'deeppedia://custom-nodes';
+  deepSearchPages[directoryId] = {
+    type: 'directory',
+    requiresTor: true,
+    label: 'Custom Nodes',
+    title: 'Custom Routes',
+    description: 'Adresář ručně přidaných uzlů.',
+    links: customLinkPages.map((entry) => ({
+      id: entry.address,
+      title: entry.title || entry.address,
+      description: entry.address,
+      chip: 'custom',
+      url: entry.address,
+    })),
+  };
+
+  customLinkPages.forEach((entry) => {
+    deepSearchPages[entry.address] = {
+      type: 'custom',
+      requiresTor: true,
+      label: 'Custom Node',
+      title: entry.title || entry.address,
+      html: entry.html || `<div class="custom-page"><p>Obsah chybí.</p></div>`,
+    };
+  });
+}
+
+injectCustomLinkPages();
+
 function incrementAlerts(message) {
   gameState.alerts += 1;
   updateStatusBar(message);
@@ -759,7 +1600,8 @@ function incrementAlerts(message) {
 function updateStatusBar(message = '') {
   if (wifiStatusEl) {
     const bars = threatLevel > 70 ? '▂▄__' : threatLevel > 40 ? '▂▄▆_' : '▂▄▆█';
-    wifiStatusEl.textContent = `Wi‑Fi ${bars}`;
+    const netLabel = gameState.currentNetwork ? gameState.currentNetwork.ssid : 'Offline';
+    wifiStatusEl.textContent = `Wi‑Fi ${bars} · ${netLabel}`;
   }
   if (alertStatusEl) {
     alertStatusEl.textContent = `Alerts: ${gameState.alerts}` + (message ? ` (${message})` : '');
@@ -1094,11 +1936,56 @@ function gameOver(reason) {
 startThreatSystem();
 
 function openApp(key, restoredState = null) {
+  if (!apps[key] && hiddenApps[key]) {
+    const canExpose = (
+      (key === 'tor' && gameState.torInstalled) ||
+      (key === 'browser' && gameState.torInstalled) ||
+      (key === 'links' && gameState.linksInstalled) ||
+      (key === 'dosmarket' && gameState.dosMarketInstalled)
+    );
+    if (canExpose) {
+      apps[key] = hiddenApps[key];
+      renderStartMenu();
+    }
+  }
+
   if (!apps[key]) return;
+
+  // Defensive: ensure Tor & Browser apps are registered if installed
+  if (key === 'tor' && (!apps.tor || typeof apps.tor.render !== 'function') && hiddenApps?.tor) {
+    apps.tor = hiddenApps.tor;
+  }
+  if (key === 'browser' && (!apps.browser || typeof apps.browser.render !== 'function') && hiddenApps?.browser) {
+    apps.browser = hiddenApps.browser;
+  }
+
+  // If network is connected but tor flag isn't set, enable it so Tor can render while online
+  if (key === 'tor' && gameState.currentNetwork && !gameState.torRunning) {
+    gameState.torRunning = true;
+  }
+  if (key === 'tor' && !gameState.currentPage) {
+    gameState.currentPage = 'about:tor';
+  }
 
   // Browser now opens as a standalone surface, not inside a window frame.
   if (key === 'browser') {
-    return openStandaloneBrowser();
+    // Deep Web search app je skrytý; nepoužívat mimo Tor klient
+    alert('Prohlížeč je dostupný jen skrz Tor Client.');
+    return;
+  }
+
+  if (key === 'dosmarket' && !gameState.dosMarketInstalled) {
+    installDosMarket();
+    return;
+  }
+  if (key === 'links' && !gameState.linksInstalled) {
+    installLinksApp();
+    // fall through to open after install
+  }
+
+  const existing = state.windows.get(key);
+  if (existing && !document.body.contains(existing.element)) {
+    state.windows.delete(key); // stale reference, allow reopen
   }
 
   const activeWindow = state.windows.get(key);
@@ -1128,7 +2015,12 @@ function openApp(key, restoredState = null) {
   }
 
   const content = windowEl.querySelector(".window__content");
-  apps[key].render(content);
+  try {
+    apps[key].render(content);
+  } catch (e) {
+    console.error(`Render failed for ${key}:`, e);
+    content.innerHTML = `<div class="tor-connect-screen"><h2>${apps[key].title || key}</h2><p>Render failed. Try reopening.</p></div>`;
+  }
 
   desktop.appendChild(windowEl);
   registerWindow(windowEl, key);
@@ -1140,6 +2032,12 @@ function openApp(key, restoredState = null) {
   } else {
     updateOpenAppsState(key, windowEl, false);
   }
+
+  persistState();
+}
+
+function persistState() {
+  try { saveGame(); } catch (e) { console.warn('saveGame failed', e); }
 }
 
 function updateOpenAppsState(key, windowEl, minimized) {
@@ -1159,6 +2057,8 @@ function updateOpenAppsState(key, windowEl, minimized) {
   } else {
     gameState.openApps.push(appState);
   }
+
+  persistState();
 }
 
 function registerWindow(windowEl, key) {
@@ -1182,12 +2082,25 @@ function registerWindow(windowEl, key) {
     element: windowEl,
     minimized: false,
   });
+}
 
-  // Track resize
-  const resizeObserver = new ResizeObserver(() => {
-    updateOpenAppsState(key, windowEl, false);
-  });
-  resizeObserver.observe(windowEl);
+function refreshApp(key) {
+  const data = state.windows.get(key);
+  if (!data) return;
+
+  const content = data.element.querySelector('.window__content');
+  if (!content) return;
+
+  const app = apps[key];
+  if (!app || typeof app.render !== 'function') return;
+
+  try {
+    app.render(content);
+  } catch (e) {
+    console.error(`Refresh failed for ${key}:`, e);
+    content.innerHTML = `<div class="tor-connect-screen"><h2>${app.title || key}</h2><p>Render failed. Try reopening.</p></div>`;
+  }
+  updateOpenAppsState(key, data.element, data.minimized);
 }
 
 function toggleMaximize(windowEl) {
@@ -1230,6 +2143,7 @@ function minimizeWindow(key) {
   data.element.setAttribute("aria-hidden", "true");
   updateTaskbarState(key, false);
   updateOpenAppsState(key, data.element, true);
+  persistState();
 }
 
 function showWindow(windowData) {
@@ -1238,6 +2152,7 @@ function showWindow(windowData) {
   windowData.minimized = false;
   updateTaskbarState(windowData.element.dataset.app, true);
   updateOpenAppsState(windowData.element.dataset.app, windowData.element, false);
+  persistState();
 }
 
 function closeWindow(key) {
@@ -1247,6 +2162,7 @@ function closeWindow(key) {
   state.windows.delete(key);
   removeTaskbarButton(key);
   gameState.openApps = gameState.openApps.filter(a => a.key !== key);
+  persistState();
 }
 
 function addTaskbarButton(key) {
@@ -1340,6 +2256,8 @@ function makeDraggable(windowEl) {
 
 const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
 
+const randomBetween = (min, max) => Math.random() * (max - min) + min;
+
 function shuffleArray(arr) {
   const a = [...arr];
   for (let i = a.length - 1; i > 0; i -= 1) {
@@ -1363,45 +2281,120 @@ function toggleStartMenu() {
 const wifiIcon = document.getElementById("wifi-icon");
 const wifiPopup = document.getElementById("wifi-popup");
 const wifiList = document.getElementById("wifi-list");
-
 const networks = [
-  { ssid: "FBI Surveillance Van #4", secured: true },
+  { ssid: "Coffee Wi-Fi", secured: false },
+  { ssid: "Mom's Internet", secured: true },
+  { ssid: "Office Net", secured: true },
   { ssid: "Skynet Global", secured: true },
-  { ssid: "Free Wi-Fi", secured: false, isTarget: true }, // The target one
-  { ssid: "Virus Distribution Center", secured: true },
-  { ssid: "Mom's Internet", secured: true }
+  { ssid: "FBI Surveillance Van #4", secured: true }
 ];
 
+const wifiLoadingProfiles = {
+  "Coffee Wi-Fi": { min: 7000, max: 10000 },
+  "Mom's Internet": { min: 6500, max: 9000 },
+  "Office Net": { min: 6000, max: 9000 },
+  "Skynet Global": { min: 5000, max: 8000 },
+  "FBI Surveillance Van #4": { min: 3000, max: 5000 },
+  default: { min: 6500, max: 9500 },
+};
+
+// VPN tiers are ordered from worst to best. Values are extra milliseconds added to the load.
+const vpnPenaltyTiers = [2000, 1200, 600, 0];
+
+let selectedNetworkSsid = null;
+
 function renderWifiList() {
-  wifiList.innerHTML = networks.map(net => `
-    <div class="wifi-item" onclick="selectWifi(this, '${net.ssid}')">
-      <div class="wifi-row">
-        <span class="wifi-signal">📶</span>
-        <span class="wifi-name">${net.ssid}</span>
-        ${net.secured ? '🔒' : ''}
+  const current = gameState.currentNetwork?.ssid || null;
+  const activeSelection = selectedNetworkSsid || current;
+
+  wifiList.innerHTML = networks.map(net => {
+    const isSelected = activeSelection === net.ssid;
+    const isConnected = current === net.ssid;
+    return `
+      <div class="wifi-item ${isSelected ? 'selected' : ''} ${isConnected ? 'connected' : ''}" data-ssid="${net.ssid}" onclick="selectWifi(this, '${net.ssid}')">
+        <div class="wifi-row">
+          <span class="wifi-signal">📶</span>
+          <div class="wifi-main">
+            <span class="wifi-name">${net.ssid}</span>
+            <span class="wifi-sub">${net.secured ? 'Secured' : 'Open'}</span>
+          </div>
+          ${net.secured ? '<span class="wifi-lock">🔒</span>' : ''}
+          ${isConnected ? '<span class="wifi-connected">Connected</span>' : ''}
+        </div>
+        <div class="wifi-details">
+          ${net.secured ? '<input type="password" class="wifi-password-input" placeholder="Enter network security key">' : ''}
+          <button class="wifi-connect-btn" onclick="connectWifi('${net.ssid}')">Connect</button>
+        </div>
       </div>
-      <div class="wifi-details">
-        ${net.secured ? '<input type="password" class="wifi-password-input" placeholder="Enter network security key">' : ''}
-        <button class="wifi-connect-btn" onclick="connectWifi('${net.ssid}')">Connect</button>
-      </div>
-    </div>
-  `).join('');
+    `;
+  }).join('');
+
+  renderWifiActions();
+}
+
+function renderWifiActions() {
+  const actions = document.querySelector('.wifi-actions');
+  if (!actions) return;
+  const connected = Boolean(gameState.currentNetwork);
+  const disconnectBtn = connected ? `<button class="wifi-action-btn" onclick="disconnectWifi()">Disconnect</button>` : '';
+  actions.innerHTML = `
+    ${disconnectBtn}
+    <button class="wifi-action-btn" onclick="openWifiSettings()">Network & Internet settings</button>
+  `;
 }
 
 window.selectWifi = (el, ssid) => {
-  // Deselect all
   document.querySelectorAll('.wifi-item').forEach(item => item.classList.remove('selected'));
-  // Select clicked
   el.classList.add('selected');
+  selectedNetworkSsid = ssid;
 };
 
 window.connectWifi = (ssid) => {
-  // Mock connection logic
   const net = networks.find(n => n.ssid === ssid);
-  if (net) {
-    alert(`Connecting to ${ssid}...`);
-    // Here you would add real connection logic
+  if (!net) return;
+
+  if (net.secured) {
+    const item = document.querySelector(`.wifi-item[data-ssid="${ssid}"]`);
+    const pwdInput = item?.querySelector('.wifi-password-input');
+    const value = pwdInput?.value.trim();
+    if (!value) {
+      alert('Zadej heslo pro tuto síť.');
+      return;
+    }
   }
+
+  gameState.currentNetwork = { ssid: net.ssid };
+  gameState.torRunning = true; // assume Tor can run once online
+  selectedNetworkSsid = net.ssid;
+  updateStatusBar();
+  try { refreshApp('tor'); } catch (e) {}
+  renderWifiList();
+  wifiPopup.style.display = "none";
+};
+
+window.disconnectWifi = () => {
+  gameState.currentNetwork = null;
+  gameState.torRunning = false;
+  gameState.currentPage = null;
+  selectedNetworkSsid = null;
+  updateStatusBar();
+  // Refresh Tor Client UI if it's open so it shows the disconnected state immediately
+  try { refreshApp('tor'); } catch (e) {}
+  // If standalone browser is open, re-render it so it shows the Tor connect screen
+  try {
+    const sb = document.getElementById('standalone-browser');
+    if (sb && sb.style.display !== 'none') {
+      const body = sb.querySelector('.standalone-body');
+      if (body && apps.browser && typeof apps.browser.render === 'function') {
+        apps.browser.render(body);
+      }
+    }
+  } catch (e) {}
+  renderWifiList();
+};
+
+window.openWifiSettings = () => {
+  alert('Network settings jsou ve vývoji.');
 };
 
 // --- Volume Logic ---
@@ -1409,6 +2402,11 @@ const volumeIcon = document.getElementById("volume-icon");
 const volumePopup = document.getElementById("volume-popup");
 const volumeSlider = document.getElementById("volume-slider");
 const volumeValue = document.getElementById("volume-value");
+
+// Set initial master volume from slider default
+if (volumeSlider) {
+  audioManager.setVolume(Number(volumeSlider.value) / 100);
+}
 
 if (volumeIcon) {
   volumeIcon.addEventListener("click", (e) => {
@@ -1428,9 +2426,7 @@ if (volumeSlider) {
   volumeSlider.addEventListener("input", (e) => {
     const val = e.target.value;
     volumeValue.textContent = val;
-    // Global volume control (mock)
-    // If you have audio elements, set their volume here:
-    // document.querySelectorAll('audio, video').forEach(el => el.volume = val / 100);
+    audioManager.setVolume(Number(val) / 100);
   });
 }
 
@@ -1440,6 +2436,7 @@ if (wifiIcon) {
     const isVisible = wifiPopup.style.display === "flex";
     wifiPopup.style.display = isVisible ? "none" : "flex";
     if (!isVisible) {
+      selectedNetworkSsid = gameState.currentNetwork?.ssid || null;
       renderWifiList();
       startMenu.classList.remove("visible");
       searchPopup.style.display = "none";
@@ -1503,6 +2500,10 @@ function renderStartMenu() {
   startMenuList.innerHTML = ""; // Clear existing
 
   Object.keys(apps).forEach(key => {
+    if (key === 'browser') return; // skrytý standalone browser
+    if (key.startsWith('custom-link-')) return; // custom link windows nejsou v nabídce
+    // Tor button zobrazuje jen když je nainstalován
+    if (key === 'tor' && !gameState.torInstalled) return;
     const app = apps[key];
     const btn = document.createElement("button");
     // Use the same class as before or a new one? 
@@ -1541,6 +2542,9 @@ if (powerMenuBtn) {
 }
 
 const goToPowerScreen = () => {
+  audioManager.stop("ambiance");
+  audioManager.stop("pcStart");
+  audioManager.stop("keyboard");
   desktopScreen.style.display = "none";
   loginScreen.style.display = "none";
   powerScreen.style.display = "flex";
@@ -1563,6 +2567,7 @@ if (btnRestart) btnRestart.addEventListener("click", goToPowerScreen);
 if (btnLogout) {
   btnLogout.addEventListener("click", () => {
     // Logout logic: Go to Login Screen
+    audioManager.stop("ambiance");
     desktopScreen.style.display = "none";
     loginScreen.style.display = "flex";
     
@@ -1586,6 +2591,7 @@ function showNotification() {
   if (notificationToast) {
     notificationToast.style.display = "block";
     // Play sound if available
+    audioManager.play("notification", { restart: true });
   }
 }
 
@@ -1620,11 +2626,22 @@ async function startStory(chatContainer, inputEl, sendBtn) {
     { type: 'file', fileName: "tor-installer.exe", action: "installTor" },
     { type: 'received', text: "Tady je první kód: <span class='code-snippet'>RR-START-84</span>", delay: 2000 },
     { type: 'player', text: "Dobře, zapíšu si to." },
-    { type: 'received', text: "Otevři Poznámkový blok. Ozvu se.", delay: 2000 }
+    { type: 'received', text: "Otevři Poznámkový blok. Ozvu se.", delay: 2000 },
+    { type: 'waitTor' },
+    { type: 'received', text: "Vidím Tor. Posílám ti PDF s trasou. Čti pečlivě.", delay: 1200 },
+    { type: 'file', fileName: "links.pdf", action: "showLinksPdf" },
+    { type: 'received', text: "Klíče hledej v Techno linkách. Většina ostatních je falešná stopa.", delay: 1800 },
+    { type: 'received', text: "Potřebuješ DOSCoiny. Stáhni DOSMarket, tam nakoupíš přístupy.", delay: 1800 },
+    { type: 'file', fileName: "dosmarket.exe", action: "installDosMarket" }
   ];
 
   const processStep = async () => {
-    if (gameState.chatStep >= script.length) return;
+    if (gameState.chatStep >= script.length) {
+      inputEl.disabled = true;
+      inputEl.placeholder = "Rozhovor ukončen.";
+      if (sendBtn) sendBtn.disabled = true;
+      return;
+    }
     const step = script[gameState.chatStep];
 
     if (step.type === 'received') {
@@ -1634,6 +2651,19 @@ async function startStory(chatContainer, inputEl, sendBtn) {
       addMessage(chatContainer, step.text, 'received');
       gameState.chatStep++;
       processStep();
+    } else if (step.type === 'waitTor') {
+      inputEl.disabled = true;
+      inputEl.placeholder = "Čekám na Tor...";
+      const waitForTor = () => {
+        if (gameState.torRunning) {
+          gameState.torBriefingSent = true;
+          gameState.chatStep++;
+          processStep();
+          return;
+        }
+        setTimeout(waitForTor, 800);
+      };
+      waitForTor();
     } else if (step.type === 'file') {
       inputEl.disabled = true;
       inputEl.placeholder = "Stáhni soubor...";
@@ -1655,9 +2685,13 @@ async function startStory(chatContainer, inputEl, sendBtn) {
       const btn = msgDiv.querySelector('.file-download-btn');
       btn.addEventListener('click', () => {
         btn.disabled = true;
-        btn.textContent = "Instaluji...";
+        btn.textContent = step.action === 'showLinksPdf' ? "Otevírám..." : "Instaluji...";
         if (step.action === 'installTor') {
             installTor();
+        } else if (step.action === 'showLinksPdf') {
+          try { showLinksPdf(); } catch (e) { console.error(e); installLinksApp(); openApp('links'); }
+        } else if (step.action === 'installDosMarket') {
+            installDosMarket();
         }
         gameState.chatStep++;
         processStep();
@@ -1670,6 +2704,7 @@ async function startStory(chatContainer, inputEl, sendBtn) {
       
       let currentTyped = "";
       const targetText = step.text;
+      let finished = false;
       
       // Remove old listeners to prevent duplicates if re-rendered
       const newInput = inputEl.cloneNode(true);
@@ -1679,6 +2714,11 @@ async function startStory(chatContainer, inputEl, sendBtn) {
       const newBtn = sendBtn.cloneNode(true);
       sendBtn.parentNode.replaceChild(newBtn, sendBtn);
       sendBtn = newBtn;
+
+      // Reactivate controls for this reply step
+      inputEl.disabled = false;
+      sendBtn.disabled = false;
+      inputEl.placeholder = "Piš cokoliv pro odpověď...";
 
       const onKeyDown = (e) => {
         if (e.key === "Enter") {
@@ -1700,19 +2740,19 @@ async function startStory(chatContainer, inputEl, sendBtn) {
       };
       
       const finishTyping = () => {
+        if (finished) return;
+        finished = true;
         addMessage(chatContainer, targetText, 'sent');
         inputEl.value = "";
+        inputEl.disabled = true;
+        sendBtn.disabled = true;
         gameState.chatStep++;
         processStep();
       };
 
       inputEl.addEventListener('keydown', onKeyDown);
       
-      sendBtn.onclick = () => {
-         if (currentTyped.length >= targetText.length) {
-            finishTyping();
-         }
-      };
+      sendBtn.onclick = finishTyping;
     }
   };
 
@@ -1774,6 +2814,17 @@ function updateClock() {
   }
 }
 
+// --- Input SFX (keyboard + mouse) ---
+window.addEventListener("keydown", (e) => {
+  if (e.key.length === 1 || e.key === "Backspace" || e.key === "Enter" || e.key === "Spacebar" || e.key === " ") {
+    audioManager.play("keyboard", { restart: true });
+  }
+});
+
+window.addEventListener("pointerdown", () => {
+  audioManager.play("mouseClick", { restart: true });
+});
+
 startButton.addEventListener("click", toggleStartMenu);
 window.addEventListener("click", handleGlobalClick);
 iconButtons.forEach((button) =>
@@ -1798,27 +2849,20 @@ function initializeDesktop() {
   if (gameState.torInstalled) {
     apps.tor = hiddenApps.tor;
     apps.browser = hiddenApps.browser;
-    renderStartMenu();
-    
-    // Add Desktop Icon
-    const desktop = document.getElementById("desktop");
-    const iconGrid = desktop.querySelector(".icon-grid");
-    
-    if (iconGrid && !iconGrid.querySelector('[data-app="tor"]')) {
-        const torBtn = document.createElement("button");
-        torBtn.className = "desktop-icon";
-        torBtn.dataset.app = "tor";
-        torBtn.innerHTML = `
-          <span class="icon-symbol">🧅</span>
-          <span class="icon-label">Tor Client</span>
-        `;
-        torBtn.addEventListener("dblclick", () => openApp("tor"));
-        torBtn.addEventListener("keydown", (e) => {
-          if (e.key === "Enter") openApp("tor");
-        });
-        iconGrid.appendChild(torBtn);
-    }
+    ensureDesktopIcon('tor', '🧅', 'Tor Client');
   }
+
+  if (gameState.linksInstalled) {
+    ensureAppDefinition('links');
+    ensureDesktopIcon('links', '📄', 'links.pdf');
+  }
+
+  if (gameState.dosMarketInstalled) {
+    ensureAppDefinition('dosmarket');
+    ensureDesktopIcon('dosmarket', '₿', 'DOSMarket');
+  }
+
+  renderStartMenu();
 
   // Restore open apps
   if (gameState.openApps && gameState.openApps.length > 0) {

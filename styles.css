@@ -83,6 +83,10 @@ body {
   flex: 1;
   position: relative;
   padding: 2.5rem;
+  /* Ensure the desktop fills the viewport area above the taskbar so maximized windows use full height */
+  height: calc(100vh - 40px);
+  min-height: calc(100vh - 40px);
+  width: 100%;
   display: flex;
   align-items: flex-start;
   justify-content: flex-start;
@@ -705,9 +709,23 @@ body {
   gap: 10px;
 }
 
+.wifi-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+}
+
+.wifi-sub {
+  font-size: 0.85rem;
+  color: #a5a5a5;
+}
+
 .wifi-name {
   font-weight: 500;
 }
+.wifi-lock { font-size: 0.9rem; }
+.wifi-connected { font-size: 0.75rem; color: var(--accent); margin-left: 6px; }
 
 .wifi-details {
   padding-left: 34px; /* Align with text */
@@ -761,6 +779,75 @@ body {
 
 .wifi-action-btn:hover {
   background: rgba(255,255,255,0.2);
+}
+
+/* Wizard (Win10 style) */
+.wizard {
+  width: min(420px, 90vw);
+  background: #1f1f1f;
+  color: #f5f5f5;
+  border-radius: 4px;
+  /* remove heavy outline to make the installer look cleaner */
+  border: none;
+  box-shadow: none;
+}
+
+.wizard-header {
+  padding: 14px 16px;
+  background: linear-gradient(90deg, #2a2a2a, #1e1e1e);
+  font-weight: 600;
+  border-bottom: 1px solid #333;
+}
+
+.wizard-body {
+  padding: 16px;
+  line-height: 1.4;
+}
+
+.wizard-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  background: #181818;
+  border-top: 1px solid #333;
+}
+
+.wizard-actions .spacer {
+  flex: 1;
+}
+
+.wizard-btn {
+  border: 1px solid #666;
+  background: #2a2a2a;
+  color: #f5f5f5;
+  padding: 6px 14px;
+  cursor: pointer;
+  border-radius: 2px;
+}
+
+.wizard-btn.primary {
+  background: #0078d7;
+  border-color: #0068b8;
+  color: #fff;
+}
+
+.wizard-btn.primary:hover { background: #0a87ef; }
+.wizard-btn.secondary:hover { background: #333; }
+
+.install-bar {
+  width: 100%;
+  height: 10px;
+  background: #2a2a2a;
+  border-radius: 4px;
+  overflow: hidden;
+  border: 1px solid #333;
+}
+
+.install-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #53c0ff, #0a87ef);
+  transition: width 0.2s ease;
 }
 
 /* Search Popup */
@@ -825,7 +912,7 @@ body {
   top: 0 !important;
   left: 0 !important;
   width: 100% !important;
-  height: calc(100% - 40px) !important;
+  height: 100% !important;
   transform: none !important;
   border: none;
   border-radius: 0;
@@ -880,7 +967,7 @@ body {
 .window__content {
   padding: 0; /* Content usually flush in Win10 apps, padding handled inside */
   height: calc(100% - 32px);
-  overflow: auto;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
   background: #1f1f1f;
@@ -1171,9 +1258,11 @@ body {
   left: 50%;
   top: 40%;
   transform: translate(-50%,-40%);
-  background: rgba(3,6,12,0.95);
-  padding: 16px;
-  border-radius: 12px;
+  /* make wrapper transparent so the inner .wizard controls visual styling
+     and to remove the dark outline the user requested */
+  background: transparent;
+  padding: 0;
+  border-radius: 0;
   z-index: 1250;
   color: var(--text);
   pointer-events: auto;
@@ -1610,6 +1699,7 @@ body {
   gap: 8px;
   border: 1px solid transparent;
   transition: background 0.1s, border 0.1s, box-shadow 0.1s;
+  position: relative;
 }
 
 .chrome-address-bar:focus-within {
@@ -1630,6 +1720,51 @@ body {
   outline: none;
   font-size: 0.9rem;
   color: #202124;
+}
+
+.chrome-loading {
+  position: absolute;
+  left: 36px;
+  right: 46px;
+  top: 4px;
+  bottom: 4px;
+  border-radius: 12px;
+  background: rgba(255,255,255,0.92);
+  border: 1px solid rgba(26,115,232,0.35);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 14px;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(2px);
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+
+.chrome-loading.active {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.chrome-loading__fill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 0%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, rgba(26,115,232,0.25), rgba(26,115,232,0.55));
+  z-index: 0;
+}
+
+.chrome-loading__label {
+  position: relative;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #1f2023;
+  z-index: 1;
 }
 
 .chrome-menu-btn {
@@ -1727,6 +1862,180 @@ body {
   min-height: 100%;
   color: #fff;
 }
+
+/* Embedded browser used inside Tor Client */
+.tor-browser-host {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+.tor-browser-host .browser-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+.tor-browser-host .browser-main {
+  flex: 1;
+  min-height: 0;
+  background: #fff;
+  color: #111;
+  border-radius: 0;
+  overflow: auto;
+  border: none;
+}
+.embedded-browser .embedded-address {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 8px;
+  position: relative;
+}
+.embedded-browser .embedded-address input {
+  flex: 1;
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid rgba(0,0,0,0.12);
+}
+
+.embedded-browser .chrome-loading {
+  left: 32px;
+  right: 40px;
+  border-radius: 8px;
+  background: rgba(10,16,32,0.92);
+  border: 1px solid rgba(142,242,255,0.35);
+}
+
+.embedded-browser .chrome-loading__label {
+  color: #d6f2ff;
+}
+
+/* PDF modal for chat download */
+.pdf-modal {
+  color: #e4e7ef;
+}
+.pdf-modal h3 {
+  margin-bottom: 8px;
+}
+.pdf-links {
+  list-style: disc;
+  padding-left: 18px;
+  margin: 10px 0 12px;
+  color: #d1d6e5;
+}
+.pdf-links code {
+  background: rgba(255,255,255,0.06);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 0.9rem;
+}
+.pdf-note {
+  color: #a8b2c9;
+  margin-bottom: 12px;
+  font-size: 0.9rem;
+}
+
+.links-area {
+  background: #1b1f2c;
+  padding: 12px;
+  gap: 10px;
+}
+.links-area .links-textarea {
+  width: 100%;
+  min-height: 260px;
+  background: rgba(0,0,0,0.35);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 8px;
+  color: #e9ecf5;
+  font-family: "Consolas", monospace;
+  font-size: 0.95rem;
+  padding: 12px;
+  resize: none;
+}
+.links-area .links-textarea:focus {
+  outline: none;
+  border-color: #8ef2ff;
+}
+.links-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.links-title {
+  font-weight: 600;
+  color: #e9ecf5;
+}
+.links-sub {
+  color: #9aa5c2;
+  font-size: 0.9rem;
+}
+.links-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 6px;
+}
+.link-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  background: rgba(255,255,255,0.05);
+  border-radius: 8px;
+  border: 1px solid rgba(255,255,255,0.07);
+}
+.link-row code {
+  color: #cfe6ff;
+  font-family: "Consolas", monospace;
+  font-size: 0.9rem;
+}
+.link-label {
+  color: #98a4c5;
+  font-size: 0.85rem;
+}
+
+.custom-link-page {
+  padding: 14px;
+  color: #e8ecf5;
+  line-height: 1.5;
+}
+.custom-link-page h2 {
+  margin-top: 0;
+  color: #8ef2ff;
+}
+
+.market-app {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px;
+  background: #11141f;
+  color: #e8ecf5;
+  height: 100%;
+}
+.market-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+}
+.market-title { font-weight: 700; letter-spacing: 0.5px; }
+.market-balance { color: #8ef2ff; }
+.market-body { flex: 1; display: flex; flex-direction: column; gap: 12px; }
+.market-status { color: #a8b2c9; }
+.market-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+.market-card {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 10px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.market-card h4 { margin: 0; color: #e4e7ef; }
+.market-card p { margin: 0; color: #b9c3dc; font-size: 0.95rem; }
 
 .tor-home-logo {
   display: flex;
