@@ -53,6 +53,7 @@ if (devResetBtn) {
   devResetBtn.addEventListener("click", (e) => {
     e.stopPropagation(); // Prevent triggering power button if nested (though it's not)
     if (confirm("Reset LocalStorage and reload?")) {
+      shouldSave = false;
       localStorage.clear();
       location.reload();
     }
@@ -118,6 +119,9 @@ function enterDesktop() {
     loginScreen.style.display = "none";
     desktopScreen.style.display = "block";
     // Initialize any desktop stuff if needed
+    if (gameState.chatStep === 0 && gameState.chatHistory.length === 0) {
+      setTimeout(showNotification, 2000); // Show notification only if story hasn't started
+    }
   }, 500);
 }
 
@@ -127,336 +131,31 @@ const state = {
 };
 
 const apps = {
-  browser: {
-    title: "Deep Web Browser",
+  chat: {
+    title: "Secure Messenger",
+    icon: "💬",
     render: (container) => {
       container.innerHTML = `
-        <section class="browser-shell">
-          <div class="browser-chrome">
-            <div class="chrome-left">
-              <button class="chrome-btn" id="nav-back" aria-label="Zpět">←</button>
-              <button class="chrome-btn" id="nav-forward" aria-label="Vpřed">→</button>
-              <button class="chrome-btn" id="nav-refresh" aria-label="Obnovit">⟳</button>
-              <span class="status-light" id="tor-status" data-state="offline">Tor: Offline</span>
-            </div>
-            <div class="chrome-address">
-              <span class="padlock">🟣</span>
-              <input id="address-bar" type="text" value="about:tor" spellcheck="false" aria-label="Adresa" />
-              <button class="chrome-btn" id="nav-go">Go</button>
-            </div>
-            <div class="chrome-right">
-              <button class="chrome-btn" id="nav-deepsearch">DeepSearch</button>
-            </div>
+        <div class="chat-app">
+          <div class="chat-messages" id="chat-history"></div>
+          <div class="chat-input-area">
+            <input type="text" id="chat-input" placeholder="Type a message..." disabled>
+            <button id="chat-send">➤</button>
           </div>
-          <div class="browser-main" id="browser-main"></div>
-        </section>
+        </div>
       `;
-
-      const view = container.querySelector('#browser-main');
-      const addressBar = container.querySelector('#address-bar');
-      const torStatus = container.querySelector('#tor-status');
-      const backBtn = container.querySelector('#nav-back');
-      const fwdBtn = container.querySelector('#nav-forward');
-      const refreshBtn = container.querySelector('#nav-refresh');
-      const goBtn = container.querySelector('#nav-go');
-      const deepBtn = container.querySelector('#nav-deepsearch');
-
-      const browserState = {
-        history: [],
-        index: -1,
-      };
-
-      const setTorStatus = (stateLabel, text) => {
-        torStatus.dataset.state = stateLabel;
-        torStatus.textContent = text;
-      };
-
-      const pushHistory = (pageId) => {
-        if (browserState.index < browserState.history.length - 1) {
-          browserState.history = browserState.history.slice(0, browserState.index + 1);
-        }
-        browserState.history.push(pageId);
-        browserState.index = browserState.history.length - 1;
-        updateNavButtons();
-      };
-
-      const updateNavButtons = () => {
-        backBtn.disabled = browserState.index <= 0;
-        fwdBtn.disabled = browserState.index >= browserState.history.length - 1;
-      };
-
-      const goTo = (pageId, push = true) => {
-        const resolved = resolvePage(pageId);
-        renderPage(resolved);
-        if (push) pushHistory(resolved);
-        addressBar.value = resolved;
-        gameState.currentPage = resolved;
-        checkThreats();
-      };
-
-      const resolvePage = (input) => {
-        if (!input) return 'about:tor';
-        const cleaned = input.trim();
-        if (cleaned.startsWith('deeppedia')) return cleaned;
-        if (cleaned === 'deepsearch' || cleaned === 'home') return 'deeppedia://';
-        if (cleaned.startsWith('http')) return 'about:tor';
-        return cleaned;
-      };
-
-      const renderPage = (pageId) => {
-        const page = deepSearchPages[pageId];
-        if (!gameState.torInstalled && page?.requiresTor) {
-          view.innerHTML = renderTorInstallCard();
-          wireTorButtons();
-          addressBar.value = 'about:tor';
-          return;
-        }
-        if (!gameState.torRunning && page?.requiresTor) {
-          view.innerHTML = renderTorInstallCard(true);
-          wireTorButtons();
-          addressBar.value = 'about:tor';
-          return;
-        }
-
-        if (!page) {
-          view.innerHTML = `<div class="article"><h2>404</h2><p>Stránka nenalezena.</p></div>`;
-          return;
-        }
-
-        if (page.type === 'tor-install') {
-          view.innerHTML = renderTorInstallCard();
-          wireTorButtons();
-          return;
-        }
-
-        if (page.type === 'directory') {
-          view.innerHTML = `
-            <div class="directory">
-              <header>
-                <p class="eyebrow">${page.label}</p>
-                <h2>${page.title}</h2>
-                <p class="muted">${page.description}</p>
-              </header>
-              <div class="deep-grid">
-                ${page.links.map(link => `
-                  <article class="deep-card" data-target="${link.id}">
-                    <div class="card-top">
-                      <span class="chip">${link.chip}</span>
-                      <span class="mini-url">${link.url}</span>
-                    </div>
-                    <h3>${link.title}</h3>
-                    <p>${link.description}</p>
-                  </article>
-                `).join('')}
-              </div>
-            </div>
-          `;
-          view.querySelectorAll('.deep-card').forEach((card) => {
-            card.addEventListener('click', () => goTo(card.dataset.target));
-          });
-          return;
-        }
-
-        if (page.type === 'article') {
-          view.innerHTML = `
-            <article class="article">
-              <p class="eyebrow">${page.label}</p>
-              <h2>${page.title}</h2>
-              ${page.body.map((p) => `<p>${p}</p>`).join('')}
-              ${page.fragments ? `<div class="fragments" id="fragment-wrap">${page.fragments.map((f, idx) => `<span class="fragment" data-fragment="${idx}">${f}</span>`).join('')}</div><button class="chrome-btn prominent" id="assemble-key">Sestavit klíč</button><div id="key-status" class="muted"></div>` : ''}
-            </article>
-          `;
-          if (page.fragments) {
-            const btn = view.querySelector('#assemble-key');
-            const status = view.querySelector('#key-status');
-            btn.addEventListener('click', () => {
-              const code = page.fragments.join('');
-              status.textContent = `Číselný klíč: ${code}`;
-              status.classList.add('found');
-              if (!gameState.numericKeyFound) {
-                gameState.numericKeyFound = true;
-                gameState.keysFound += 1;
-                incrementAlerts('Numeric key');
-              }
-            });
-          }
-          return;
-        }
-      };
-
-      const renderTorInstallCard = (installedButOffline = false) => {
-        const stateText = gameState.torInstalled ? 'Staženo' : 'Není staženo';
-        const connectText = gameState.torRunning ? 'Connected' : installedButOffline ? 'Připoj Tor' : 'Neaktivní';
-        return `
-          <div class="tor-card">
-            <div>
-              <p class="eyebrow">Tor Client</p>
-              <h2>Stáhni Tor pro DeepSearch</h2>
-              <p class="muted">Simulovaný download pro odemknutí deep web prohlížeče. Po stažení spusť klient a vstup do Deeppedia.</p>
-              <div class="tor-status-line">
-                <span>Balík: ${stateText}</span>
-                <span>Stav: ${connectText}</span>
-              </div>
-              <div class="tor-actions">
-                <button class="chrome-btn prominent" id="tor-download">Stáhnout</button>
-                <button class="chrome-btn" id="tor-launch" ${gameState.torInstalled ? '' : 'disabled'}>Spustit DeepSearch</button>
-              </div>
-            </div>
-            <div class="tor-side">
-              <div class="tor-meter" aria-label="download-progress"><span id="tor-meter-fill" style="width: ${gameState.torInstalled ? '100%' : '8%'}"></span></div>
-              <small class="muted">SHA256 ověřeno · onion route ready</small>
-            </div>
-          </div>
-        `;
-      };
-
-      const wireTorButtons = () => {
-        const downloadBtn = view.querySelector('#tor-download');
-        const launchBtn = view.querySelector('#tor-launch');
-        const meter = view.querySelector('#tor-meter-fill');
-        if (downloadBtn) {
-          downloadBtn.addEventListener('click', () => {
-            downloadBtn.disabled = true;
-            downloadBtn.textContent = 'Stahuji...';
-            let progress = gameState.torInstalled ? 100 : 10;
-            const iv = setInterval(() => {
-              progress = Math.min(100, progress + Math.random() * 18 + 8);
-              if (meter) meter.style.width = `${progress}%`;
-              if (progress >= 100) {
-                clearInterval(iv);
-                gameState.torInstalled = true;
-                downloadBtn.textContent = 'Staženo';
-                if (launchBtn) launchBtn.disabled = false;
-                setTorStatus('installed', 'Tor: Staženo');
-                incrementAlerts('Tor připraven');
-              }
-            }, 220);
-          });
-        }
-        if (launchBtn) {
-          launchBtn.addEventListener('click', () => {
-            if (!gameState.torInstalled) return;
-            gameState.torRunning = true;
-            setTorStatus('online', 'Tor: Online');
-            incrementAlerts('Tor spuštěn');
-            goTo('deeppedia://');
-          });
-        }
-      };
-
-      backBtn.addEventListener('click', () => {
-        if (browserState.index <= 0) return;
-        browserState.index -= 1;
-        const target = browserState.history[browserState.index];
-        renderPage(target);
-        addressBar.value = target;
-        updateNavButtons();
-      });
-
-      fwdBtn.addEventListener('click', () => {
-        if (browserState.index >= browserState.history.length - 1) return;
-        browserState.index += 1;
-        const target = browserState.history[browserState.index];
-        renderPage(target);
-        addressBar.value = target;
-        updateNavButtons();
-      });
-
-      refreshBtn.addEventListener('click', () => {
-        if (browserState.index < 0) return;
-        const target = browserState.history[browserState.index];
-        renderPage(target);
-      });
-
-      goBtn.addEventListener('click', () => goTo(addressBar.value));
-      addressBar.addEventListener('keydown', (event) => {
-        if (event.key === 'Enter') goTo(addressBar.value);
-      });
-      deepBtn.addEventListener('click', () => goTo('deeppedia://'));
-
-      // initial render
-      setTorStatus(gameState.torRunning ? 'online' : gameState.torInstalled ? 'installed' : 'offline', gameState.torRunning ? 'Tor: Online' : gameState.torInstalled ? 'Tor: Staženo' : 'Tor: Offline');
-      goTo('about:tor');
-    },
-  },
-  tor: {
-    title: "Tor Client",
-    render: (container) => {
-      container.innerHTML = `
-        <section class="tor-installer">
-          <h2>Tor Client</h2>
-          <p>Stáhni a spusť klient, aby DeepSearch fungoval.</p>
-          <div class="tor-installer__actions">
-            <button id="tor-install-btn">${gameState.torInstalled ? 'Přeinstalovat' : 'Stáhnout'}</button>
-            <button id="tor-run-btn" ${gameState.torInstalled ? '' : 'disabled'}>${gameState.torRunning ? 'Restart' : 'Spustit'}</button>
-          </div>
-          <div class="tor-installer__status" id="tor-installer-status">${gameState.torRunning ? 'Tor běží' : gameState.torInstalled ? 'Tor stažen' : 'Tor není nainstalován'}</div>
-        </section>
-      `;
-      const installBtn = container.querySelector('#tor-install-btn');
-      const runBtn = container.querySelector('#tor-run-btn');
-      const status = container.querySelector('#tor-installer-status');
-
-      installBtn.addEventListener('click', () => {
-        installBtn.disabled = true;
-        installBtn.textContent = 'Stahuji...';
-        let progress = 0;
-        const iv = setInterval(() => {
-          progress += Math.random() * 25 + 10;
-          if (progress >= 100) {
-            clearInterval(iv);
-            gameState.torInstalled = true;
-            installBtn.textContent = 'Přeinstalovat';
-            runBtn.disabled = false;
-            status.textContent = 'Tor stažen';
-            incrementAlerts('Tor stažen');
-          }
-        }, 260);
-      });
-
-      runBtn.addEventListener('click', () => {
-        if (!gameState.torInstalled) return;
-        gameState.torRunning = true;
-        status.textContent = 'Tor běží';
-        incrementAlerts('Tor spuštěn');
-      });
-    },
-  },
-  files: {
-    title: "Archive",
-    render: (container) => {
-      const files = [
-        { name: "case-notes.pdf", status: "encrypted" },
-        { name: "audio_log_07.wav", status: "needs decode" },
-        { name: "door_codes.txt", status: "outdated" },
-        { name: "cipher-wheel.ai", status: "trusted" },
-      ];
-
-      container.innerHTML = `
-        <section class="file-list">
-          ${files
-            .map(
-              (file) => `
-                <div class="file-item">
-                  <span>${file.name}</span>
-                  <small>${file.status}</small>
-                </div>
-              `
-            )
-            .join("")}
-        </section>
-      `;
-    },
+      startStory(container.querySelector('#chat-history'), container.querySelector('#chat-input'), container.querySelector('#chat-send'));
+    }
   },
   notes: {
     title: "Notes",
+    icon: "✎",
     render: (container) => {
       const storageKey = "etg-notes";
       const saved = localStorage.getItem(storageKey) ?? "";
       container.innerHTML = `
         <section class="notes-area">
           <textarea placeholder="Zaznamenávej stopy...">${saved}</textarea>
-          <small>Ukládá se automaticky</small>
         </section>
       `;
 
@@ -468,6 +167,7 @@ const apps = {
   },
   paint: {
     title: "Studio",
+    icon: "🎨",
     render: (container) => {
       container.innerHTML = `
         <section class="paint">
@@ -539,6 +239,360 @@ const apps = {
   
 };
 
+const hiddenApps = {
+  browser: {
+    title: "Deep Web Browser",
+    icon: "⬤",
+    render: (container) => {
+      container.innerHTML = `
+        <section class="browser-shell">
+          <div class="browser-chrome">
+            <div class="chrome-tabs">
+              <div class="chrome-tab active">
+                <span class="tab-icon">🧅</span>
+                <span class="tab-title">New Tab</span>
+                <span class="tab-close">×</span>
+              </div>
+              <div class="chrome-tab-add">+</div>
+            </div>
+            <div class="chrome-toolbar">
+              <div class="chrome-nav-controls">
+                <button class="chrome-btn" id="nav-back" aria-label="Zpět">←</button>
+                <button class="chrome-btn" id="nav-forward" aria-label="Vpřed">→</button>
+                <button class="chrome-btn" id="nav-refresh" aria-label="Obnovit">⟳</button>
+              </div>
+              <div class="chrome-address-bar">
+                <span class="onion-icon">🧅</span>
+                <input id="address-bar" type="text" value="about:tor" spellcheck="false" aria-label="Adresa" />
+                <button class="chrome-btn" id="nav-go">➤</button>
+              </div>
+              <div class="chrome-menu-btn">≡</div>
+            </div>
+          </div>
+          <div class="browser-main" id="browser-main"></div>
+        </section>
+      `;
+
+      const view = container.querySelector('#browser-main');
+      const addressBar = container.querySelector('#address-bar');
+      const backBtn = container.querySelector('#nav-back');
+      const fwdBtn = container.querySelector('#nav-forward');
+      const refreshBtn = container.querySelector('#nav-refresh');
+      const goBtn = container.querySelector('#nav-go');
+      const tabTitle = container.querySelector('.tab-title');
+
+      const browserState = {
+        history: [],
+        index: -1,
+      };
+
+      const pushHistory = (pageId) => {
+        if (browserState.index < browserState.history.length - 1) {
+          browserState.history = browserState.history.slice(0, browserState.index + 1);
+        }
+        browserState.history.push(pageId);
+        browserState.index = browserState.history.length - 1;
+        updateNavButtons();
+      };
+
+      const updateNavButtons = () => {
+        backBtn.disabled = browserState.index <= 0;
+        fwdBtn.disabled = browserState.index >= browserState.history.length - 1;
+      };
+
+      const goTo = (pageId, push = true) => {
+        const resolved = resolvePage(pageId);
+        renderPage(resolved);
+        if (push) pushHistory(resolved);
+        addressBar.value = resolved;
+        gameState.currentPage = resolved;
+        checkThreats();
+        
+        // Update tab title
+        const page = deepSearchPages[resolved];
+        if (page) {
+            tabTitle.textContent = page.title || "New Tab";
+        } else if (resolved === 'about:tor') {
+            tabTitle.textContent = "Connect to Tor";
+        } else {
+            tabTitle.textContent = resolved;
+        }
+      };
+
+      const resolvePage = (input) => {
+        if (!input) return 'about:tor';
+        const cleaned = input.trim();
+        if (cleaned.startsWith('deeppedia')) return cleaned;
+        if (cleaned === 'deepsearch' || cleaned === 'home') return 'deeppedia://';
+        if (cleaned.startsWith('http')) return 'about:tor';
+        return cleaned;
+      };
+
+      const renderPage = (pageId) => {
+        // Check Tor connection first
+        if (!gameState.torRunning) {
+             view.innerHTML = renderTorConnect();
+             const connectBtn = view.querySelector('#tor-connect-btn');
+             if (connectBtn) {
+                 connectBtn.addEventListener('click', () => {
+                     connectBtn.disabled = true;
+                     connectBtn.textContent = "Connecting...";
+                     setTimeout(() => {
+                         gameState.torRunning = true;
+                         incrementAlerts('Tor Connected');
+                         goTo('about:tor');
+                     }, 2000);
+                 });
+             }
+             return;
+        }
+
+        const page = deepSearchPages[pageId];
+        
+        if (!page) {
+          view.innerHTML = `<div class="article"><h2>404</h2><p>Stránka nenalezena.</p></div>`;
+          return;
+        }
+
+        if (pageId === 'about:tor') {
+            view.innerHTML = renderTorHome();
+            const searchInput = view.querySelector('.tor-search-input');
+            const searchBtn = view.querySelector('.tor-search-btn');
+            
+            const doSearch = () => {
+                const val = searchInput.value.toLowerCase();
+                if (val === 'deeppedia' || val === 'wiki' || val === 'links') {
+                    goTo('deeppedia://');
+                } else {
+                    alert("DuckDuckGo onion search: No results found for '" + val + "'");
+                }
+            };
+            
+            searchBtn.addEventListener('click', doSearch);
+            searchInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') doSearch();
+            });
+            return;
+        }
+
+        if (page.type === 'directory') {
+          view.innerHTML = `
+            <div class="directory">
+              <header>
+                <div class="directory-logo">🧅 Deeppedia</div>
+                <p class="muted">${page.description}</p>
+              </header>
+              <div class="deep-grid">
+                ${page.links.map(link => `
+                  <article class="deep-card" data-target="${link.id}">
+                    <div class="card-top">
+                      <span class="chip">${link.chip}</span>
+                      <span class="mini-url">${link.url}</span>
+                    </div>
+                    <h3>${link.title}</h3>
+                    <p>${link.description}</p>
+                  </article>
+                `).join('')}
+              </div>
+            </div>
+          `;
+          view.querySelectorAll('.deep-card').forEach((card) => {
+            card.addEventListener('click', () => goTo(card.dataset.target));
+          });
+          return;
+        }
+
+        if (page.type === 'article') {
+          view.innerHTML = `
+            <article class="article">
+              <p class="eyebrow">${page.label}</p>
+              <h2>${page.title}</h2>
+              ${page.body.map((p) => `<p>${p}</p>`).join('')}
+              ${page.fragments ? `<div class="fragments" id="fragment-wrap">${page.fragments.map((f, idx) => `<span class="fragment" data-fragment="${idx}">${f}</span>`).join('')}</div><button class="chrome-btn prominent" id="assemble-key">Sestavit klíč</button><div id="key-status" class="muted"></div>` : ''}
+            </article>
+          `;
+          if (page.fragments) {
+            const btn = view.querySelector('#assemble-key');
+            const status = view.querySelector('#key-status');
+            btn.addEventListener('click', () => {
+              const code = page.fragments.join('');
+              status.textContent = `Číselný klíč: ${code}`;
+              status.classList.add('found');
+              if (!gameState.numericKeyFound) {
+                gameState.numericKeyFound = true;
+                gameState.keysFound += 1;
+                incrementAlerts('Numeric key');
+              }
+            });
+          }
+          return;
+        }
+      };
+
+      const renderTorConnect = () => {
+          return `
+            <div class="tor-connect-screen">
+                <div class="tor-logo-large">🧅</div>
+                <h2>Connect to Tor</h2>
+                <p>Tor Browser routes your traffic over the Tor Network, run by thousands of volunteers around the world.</p>
+                <button id="tor-connect-btn" class="tor-primary-btn">Connect</button>
+                <div class="tor-checkbox">
+                    <input type="checkbox" checked disabled> <span>Always connect automatically</span>
+                </div>
+            </div>
+          `;
+      };
+
+      const renderTorHome = () => {
+          return `
+            <div class="tor-home-screen">
+                <div class="tor-home-logo">
+                    <span style="color: #7D4698; font-size: 4rem;">🧅</span>
+                    <h1>Tor Browser</h1>
+                </div>
+                <div class="tor-search-box">
+                    <input type="text" class="tor-search-input" placeholder="Search with DuckDuckGo or enter address">
+                    <button class="tor-search-btn">🔍</button>
+                </div>
+                <div class="tor-info-cards">
+                    <div class="tor-info-card">
+                        <h3>Welcome</h3>
+                        <p>You are now ready to browse the Internet privately.</p>
+                    </div>
+                    <div class="tor-info-card">
+                        <h3>Security</h3>
+                        <p>Security Level: Standard</p>
+                    </div>
+                </div>
+            </div>
+          `;
+      };
+
+      backBtn.addEventListener('click', () => {
+        if (browserState.index <= 0) return;
+        browserState.index -= 1;
+        const target = browserState.history[browserState.index];
+        renderPage(target);
+        addressBar.value = target;
+        updateNavButtons();
+      });
+
+      fwdBtn.addEventListener('click', () => {
+        if (browserState.index >= browserState.history.length - 1) return;
+        browserState.index += 1;
+        const target = browserState.history[browserState.index];
+        renderPage(target);
+        addressBar.value = target;
+        updateNavButtons();
+      });
+
+      refreshBtn.addEventListener('click', () => {
+        if (browserState.index < 0) return;
+        const target = browserState.history[browserState.index];
+        renderPage(target);
+      });
+
+      goBtn.addEventListener('click', () => goTo(addressBar.value));
+      addressBar.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') goTo(addressBar.value);
+      });
+
+      // initial render
+      goTo('about:tor');
+    },
+  },
+  tor: {
+    title: "Tor Client",
+    icon: "🧅",
+    render: (container) => {
+      // Redirect to browser if Tor is "running" (simplified for game flow)
+      // Or keep it as a settings panel. Let's keep it simple as a status panel.
+      container.innerHTML = `
+        <section class="tor-settings">
+          <h2>Tor Network Settings</h2>
+          <div class="tor-status-panel">
+             <div class="status-row">
+                <span>Status:</span>
+                <span style="color: ${gameState.torRunning ? '#0f0' : '#f00'}">${gameState.torRunning ? 'Connected' : 'Disconnected'}</span>
+             </div>
+             <div class="status-row">
+                <span>Circuit:</span>
+                <span>${gameState.torRunning ? 'Relay (France) -> Relay (Germany) -> Relay (Unknown)' : 'None'}</span>
+             </div>
+             <div class="status-row">
+                <span>Bridge:</span>
+                <span>obfs4 (recommended)</span>
+             </div>
+          </div>
+          <p style="margin-top: 20px; font-size: 0.9rem; color: #aaa;">
+            Tor protects your privacy by routing your traffic through a network of relays.
+          </p>
+        </section>
+      `;
+    },
+  },
+};
+
+function installTor() {
+  const overlay = document.getElementById('popupLayer');
+  const box = document.createElement('div');
+  box.className = 'door-popup';
+  box.innerHTML = `
+    <div>
+      <strong>Instalace Tor Client</strong>
+      <p>Probíhá instalace...</p>
+      <div style="height:10px;background:#222;border-radius:8px;margin-top:8px;">
+        <div id="install-fill" style="height:10px;background:lime;width:0%;border-radius:8px;"></div>
+      </div>
+    </div>
+  `;
+  overlay.appendChild(box);
+  overlay.style.pointerEvents = 'auto';
+
+  const fill = box.querySelector('#install-fill');
+  let progress = 0;
+  const iv = setInterval(() => {
+    progress += Math.random() * 15 + 5;
+    if (progress > 100) progress = 100;
+    fill.style.width = `${progress}%`;
+    
+    if (progress >= 100) {
+      clearInterval(iv);
+      setTimeout(() => {
+        box.remove();
+        overlay.style.pointerEvents = 'none';
+        
+        // Enable apps
+        apps.tor = hiddenApps.tor;
+        apps.browser = hiddenApps.browser;
+        gameState.torInstalled = true;
+        
+        // Render Start Menu
+        renderStartMenu();
+        
+        // Add Desktop Icon
+        const desktop = document.getElementById("desktop");
+        const iconGrid = desktop.querySelector(".icon-grid");
+        
+        const torBtn = document.createElement("button");
+        torBtn.className = "desktop-icon";
+        torBtn.dataset.app = "tor";
+        torBtn.innerHTML = `
+          <span class="icon-symbol">🧅</span>
+          <span class="icon-label">Tor Client</span>
+        `;
+        torBtn.addEventListener("dblclick", () => openApp("tor"));
+        torBtn.addEventListener("keydown", (e) => {
+          if (e.key === "Enter") openApp("tor");
+        });
+        iconGrid.appendChild(torBtn);
+        
+        showNotification("System", "Tor Client byl úspěšně nainstalován.");
+      }, 500);
+    }
+  }, 300);
+}
+
 function getCanvasPos(event, canvas) {
   const rect = canvas.getBoundingClientRect();
   const x = event.clientX - rect.left;
@@ -555,7 +609,7 @@ function debounce(fn, wait) {
 }
 
 /* Game state and DeepWeb data */
-let gameState = {
+const defaultGameState = {
   isKidnapperActive: false,
   isBreatherActive: false,
   keysFound: 0,
@@ -566,7 +620,35 @@ let gameState = {
   torRunning: false,
   numericKeyFound: false,
   alerts: 0,
+  chatStep: 0,
+  chatHistory: [],
+  openApps: [], // Array of { key, minimized, x, y, zIndex }
 };
+
+function loadSavedData() {
+  try {
+    const saved = localStorage.getItem("etg-save-v1");
+    if (saved) return JSON.parse(saved);
+  } catch (e) { console.error(e); }
+  return null;
+}
+
+const savedData = loadSavedData();
+let gameState = savedData ? { ...defaultGameState, ...savedData.gameState } : { ...defaultGameState };
+
+let shouldSave = true;
+
+function saveGame() {
+  if (!shouldSave) return;
+  const data = {
+    gameState,
+    threatLevel
+  };
+  localStorage.setItem("etg-save-v1", JSON.stringify(data));
+}
+
+setInterval(saveGame, 1000);
+window.addEventListener("beforeunload", saveGame);
 
 const deepSearchPages = {
   "about:tor": {
@@ -831,7 +913,7 @@ function startNumberHack() {
 
 /* Threat system */
 let threatInterval = null;
-let threatLevel = 0; // 0..100
+let threatLevel = savedData ? (savedData.threatLevel || 0) : 0; // 0..100
 
 function startThreatSystem() {
   if (threatInterval) return;
@@ -1011,7 +1093,7 @@ function gameOver(reason) {
 // start threat system on load
 startThreatSystem();
 
-function openApp(key) {
+function openApp(key, restoredState = null) {
   if (!apps[key]) return;
 
   // Browser now opens as a standalone surface, not inside a window frame.
@@ -1030,11 +1112,20 @@ function openApp(key) {
   const windowEl = windowFragment;
   windowEl.dataset.app = key;
   windowEl.querySelector(".window__title").textContent = apps[key].title;
-  windowEl.style.zIndex = state.zIndex++;
+  windowEl.style.zIndex = restoredState ? restoredState.zIndex : state.zIndex++;
 
-  const offset = (state.windows.size % 4) * 26;
-  windowEl.style.top = `${120 + offset}px`;
-  windowEl.style.left = `${220 + offset}px`;
+  if (restoredState) {
+    windowEl.style.top = restoredState.y;
+    windowEl.style.left = restoredState.x;
+    if (restoredState.width) windowEl.style.width = restoredState.width;
+    if (restoredState.height) windowEl.style.height = restoredState.height;
+  } else {
+    const offset = (state.windows.size % 4) * 26;
+    windowEl.style.top = `${120 + offset}px`;
+    windowEl.style.left = `${220 + offset}px`;
+    windowEl.style.width = "480px";
+    windowEl.style.height = "360px";
+  }
 
   const content = windowEl.querySelector(".window__content");
   apps[key].render(content);
@@ -1043,20 +1134,64 @@ function openApp(key) {
   registerWindow(windowEl, key);
   makeDraggable(windowEl);
   addTaskbarButton(key);
+
+  if (restoredState && restoredState.minimized) {
+    minimizeWindow(key);
+  } else {
+    updateOpenAppsState(key, windowEl, false);
+  }
+}
+
+function updateOpenAppsState(key, windowEl, minimized) {
+  const idx = gameState.openApps.findIndex(a => a.key === key);
+  const appState = {
+    key,
+    minimized,
+    x: windowEl.style.left,
+    y: windowEl.style.top,
+    width: windowEl.style.width,
+    height: windowEl.style.height,
+    zIndex: windowEl.style.zIndex
+  };
+  
+  if (idx >= 0) {
+    gameState.openApps[idx] = appState;
+  } else {
+    gameState.openApps.push(appState);
+  }
 }
 
 function registerWindow(windowEl, key) {
   const closeBtn = windowEl.querySelector(".window__btn--close");
   const minBtn = windowEl.querySelector(".window__btn--min");
+  const maxBtn = windowEl.querySelector(".window__btn--max");
 
   closeBtn.addEventListener("click", () => closeWindow(key));
   minBtn.addEventListener("click", () => minimizeWindow(key));
+  if (maxBtn) {
+    maxBtn.addEventListener("click", () => toggleMaximize(windowEl));
+  }
+  
+  // Double click header to maximize
+  const header = windowEl.querySelector(".window__header");
+  header.addEventListener("dblclick", () => toggleMaximize(windowEl));
+
   windowEl.addEventListener("mousedown", () => focusWindow(windowEl));
 
   state.windows.set(key, {
     element: windowEl,
     minimized: false,
   });
+
+  // Track resize
+  const resizeObserver = new ResizeObserver(() => {
+    updateOpenAppsState(key, windowEl, false);
+  });
+  resizeObserver.observe(windowEl);
+}
+
+function toggleMaximize(windowEl) {
+  windowEl.classList.toggle("maximized");
 }
 
 function openStandaloneBrowser() {
@@ -1094,6 +1229,7 @@ function minimizeWindow(key) {
   data.element.classList.add("window--hidden");
   data.element.setAttribute("aria-hidden", "true");
   updateTaskbarState(key, false);
+  updateOpenAppsState(key, data.element, true);
 }
 
 function showWindow(windowData) {
@@ -1101,6 +1237,7 @@ function showWindow(windowData) {
   windowData.element.removeAttribute("aria-hidden");
   windowData.minimized = false;
   updateTaskbarState(windowData.element.dataset.app, true);
+  updateOpenAppsState(windowData.element.dataset.app, windowData.element, false);
 }
 
 function closeWindow(key) {
@@ -1109,11 +1246,13 @@ function closeWindow(key) {
   data.element.remove();
   state.windows.delete(key);
   removeTaskbarButton(key);
+  gameState.openApps = gameState.openApps.filter(a => a.key !== key);
 }
 
 function addTaskbarButton(key) {
   const button = document.createElement("button");
-  button.textContent = apps[key].title;
+  button.textContent = apps[key].icon || apps[key].title.substring(0, 2);
+  button.title = apps[key].title;
   button.dataset.app = key;
   button.addEventListener("click", () => toggleFromTaskbar(key));
   taskbarApps.appendChild(button);
@@ -1160,16 +1299,30 @@ function makeDraggable(windowEl) {
 
   const onPointerMove = (event) => {
     if (!dragging) return;
+    
     const desktopRect = desktop.getBoundingClientRect();
-    const { width, height } = windowEl.getBoundingClientRect();
-    const minX = desktopRect.left + 20;
-    const maxX = Math.max(minX, desktopRect.right - width - 20);
-    const minY = desktopRect.top + 40;
-    const maxY = Math.max(minY, desktopRect.bottom - height - 60);
-    const nextX = clamp(event.clientX - offsetX, minX, maxX);
-    const nextY = clamp(event.clientY - offsetY, minY, maxY);
-    windowEl.style.left = `${nextX}px`;
-    windowEl.style.top = `${nextY}px`;
+    const windowRect = windowEl.getBoundingClientRect();
+    
+    // Calculate desired global position
+    let globalX = event.clientX - offsetX;
+    let globalY = event.clientY - offsetY;
+    
+    // Convert to relative position (relative to desktop container)
+    let relativeX = globalX - desktopRect.left;
+    let relativeY = globalY - desktopRect.top;
+    
+    // Clamp within desktop bounds (with some padding)
+    // Allow window to go slightly off-screen but keep header visible
+    const minX = 0;
+    const maxX = desktopRect.width - windowRect.width;
+    const minY = 0;
+    const maxY = desktopRect.height - 40; // Keep at least 40px of header visible
+    
+    relativeX = clamp(relativeX, -windowRect.width + 50, desktopRect.width - 50);
+    relativeY = clamp(relativeY, 0, desktopRect.height - 40);
+
+    windowEl.style.left = `${relativeX}px`;
+    windowEl.style.top = `${relativeY}px`;
   };
 
   const onPointerUp = (event) => {
@@ -1177,6 +1330,7 @@ function makeDraggable(windowEl) {
     if (windowEl.hasPointerCapture?.(event.pointerId)) {
       windowEl.releasePointerCapture(event.pointerId);
     }
+    updateOpenAppsState(windowEl.dataset.app, windowEl, false);
   };
 
   header.addEventListener("pointerdown", onPointerDown);
@@ -1320,16 +1474,54 @@ function renderSearchResults(query) {
   
   const filtered = allApps.filter(app => app.title.toLowerCase().includes(q));
   
-  searchResults.innerHTML = filtered.map(app => `
-    <div class="search-result-item" onclick="openApp('${app.key}'); searchPopup.style.display='none'">
-      <span class="app-icon-small">📱</span>
-      <span>${app.title}</span>
-    </div>
-  `).join('');
-  
+  searchResults.innerHTML = "";
+
   if (filtered.length === 0) {
     searchResults.innerHTML = `<div style="padding:10px; color:#aaa">No results for "${query}"</div>`;
+    return;
   }
+
+  filtered.forEach(app => {
+    const item = document.createElement("div");
+    item.className = "search-result-item";
+    item.innerHTML = `
+      <span class="app-icon-small">${app.icon}</span>
+      <span>${app.title}</span>
+    `;
+    item.addEventListener("click", () => {
+      openApp(app.key);
+      searchPopup.style.display = "none";
+    });
+    searchResults.appendChild(item);
+  });
+}
+
+function renderStartMenu() {
+  const startMenuList = document.getElementById("start-menu-list");
+  if (!startMenuList) return;
+
+  startMenuList.innerHTML = ""; // Clear existing
+
+  Object.keys(apps).forEach(key => {
+    const app = apps[key];
+    const btn = document.createElement("button");
+    // Use the same class as before or a new one? 
+    // The CSS might expect specific classes. 
+    // Looking at previous HTML (which I deleted), it was just <button data-app="...">...
+    // But let's check styles.css for .start-menu__apps button
+    btn.dataset.app = key;
+    btn.innerHTML = `
+      <span class="app-icon">${app.icon}</span>
+      <span class="app-name">${app.title}</span>
+    `;
+    
+    btn.addEventListener("click", () => {
+      openApp(key);
+      toggleStartMenu();
+    });
+
+    startMenuList.appendChild(btn);
+  });
 }
 
 // --- Power Menu Logic ---
@@ -1386,6 +1578,162 @@ if (btnLogout) {
   });
 }
 
+// --- Notification & Story Logic ---
+const notificationToast = document.getElementById("notification-toast");
+const notificationClose = document.querySelector(".notification-close");
+
+function showNotification() {
+  if (notificationToast) {
+    notificationToast.style.display = "block";
+    // Play sound if available
+  }
+}
+
+if (notificationToast) {
+  notificationToast.addEventListener("click", (e) => {
+    if (e.target.closest(".notification-close")) {
+      notificationToast.style.display = "none";
+      return;
+    }
+    notificationToast.style.display = "none";
+    openApp("chat");
+  });
+}
+
+let storyStarted = false;
+async function startStory(chatContainer, inputEl, sendBtn) {
+  // Restore history
+  gameState.chatHistory.forEach(msg => {
+    addMessage(chatContainer, msg.text, msg.type, false);
+  });
+
+  const script = [
+    { type: 'received', text: "Jsi tam? Poslouchej pozorně. Nemáme moc času.", delay: 500 },
+    { type: 'player', text: "Kdo jsi? A o co jde?" },
+    { type: 'received', text: "Byl jsi vybrán. Tvůj systém je nyní připojen k síti Red Room.", delay: 1500 },
+    { type: 'player', text: "Red Room? To zní jako nějaká legenda." },
+    { type: 'received', text: "Kéž by. Je to místo, kde se dějí věci, které by nikdo neměl vidět.", delay: 2000 },
+    { type: 'received', text: "Dnes večer plánují živé vysílání popravy. Máš 2 hodiny.", delay: 3000 },
+    { type: 'player', text: "Co s tím mám dělat já?" },
+    { type: 'received', text: "Musíš získat administrátorský přístup. Hledej kódy 'RR-XXXX'.", delay: 2000 },
+    { type: 'received', text: "Pro přístup budeš potřebovat tohle. Stáhni to a nainstaluj.", delay: 2000 },
+    { type: 'file', fileName: "tor-installer.exe", action: "installTor" },
+    { type: 'received', text: "Tady je první kód: <span class='code-snippet'>RR-START-84</span>", delay: 2000 },
+    { type: 'player', text: "Dobře, zapíšu si to." },
+    { type: 'received', text: "Otevři Poznámkový blok. Ozvu se.", delay: 2000 }
+  ];
+
+  const processStep = async () => {
+    if (gameState.chatStep >= script.length) return;
+    const step = script[gameState.chatStep];
+
+    if (step.type === 'received') {
+      inputEl.disabled = true;
+      inputEl.placeholder = "Čekání na odpověď...";
+      await new Promise(r => setTimeout(r, step.delay));
+      addMessage(chatContainer, step.text, 'received');
+      gameState.chatStep++;
+      processStep();
+    } else if (step.type === 'file') {
+      inputEl.disabled = true;
+      inputEl.placeholder = "Stáhni soubor...";
+      
+      const msgDiv = document.createElement("div");
+      msgDiv.className = "message received file-message";
+      msgDiv.innerHTML = `
+        <span class="sender">Unknown</span>
+        <div class="file-attachment">
+          <span class="file-icon">📦</span>
+          <span class="file-name">${step.fileName}</span>
+          <button class="file-download-btn">Stáhnout</button>
+        </div>
+      `;
+      chatContainer.appendChild(msgDiv);
+      chatContainer.scrollTop = chatContainer.scrollHeight;
+      gameState.chatHistory.push({ text: `[File: ${step.fileName}]`, type: 'received' });
+      
+      const btn = msgDiv.querySelector('.file-download-btn');
+      btn.addEventListener('click', () => {
+        btn.disabled = true;
+        btn.textContent = "Instaluji...";
+        if (step.action === 'installTor') {
+            installTor();
+        }
+        gameState.chatStep++;
+        processStep();
+      });
+      
+    } else if (step.type === 'player') {
+      inputEl.disabled = false;
+      inputEl.placeholder = "Piš cokoliv pro odpověď...";
+      inputEl.focus();
+      
+      let currentTyped = "";
+      const targetText = step.text;
+      
+      // Remove old listeners to prevent duplicates if re-rendered
+      const newInput = inputEl.cloneNode(true);
+      inputEl.parentNode.replaceChild(newInput, inputEl);
+      inputEl = newInput;
+      
+      const newBtn = sendBtn.cloneNode(true);
+      sendBtn.parentNode.replaceChild(newBtn, sendBtn);
+      sendBtn = newBtn;
+
+      const onKeyDown = (e) => {
+        if (e.key === "Enter") {
+            if (currentTyped.length >= targetText.length) {
+                finishTyping();
+            }
+            return;
+        }
+        
+        // Ignore non-character keys
+        if (e.key.length > 1 && e.key !== "Backspace") return;
+        
+        e.preventDefault();
+        
+        if (currentTyped.length < targetText.length) {
+            currentTyped += targetText[currentTyped.length];
+            inputEl.value = currentTyped;
+        }
+      };
+      
+      const finishTyping = () => {
+        addMessage(chatContainer, targetText, 'sent');
+        inputEl.value = "";
+        gameState.chatStep++;
+        processStep();
+      };
+
+      inputEl.addEventListener('keydown', onKeyDown);
+      
+      sendBtn.onclick = () => {
+         if (currentTyped.length >= targetText.length) {
+            finishTyping();
+         }
+      };
+    }
+  };
+
+  processStep();
+}
+
+function addMessage(container, text, type, save = true) {
+  const msgDiv = document.createElement("div");
+  msgDiv.className = `message ${type}`;
+  msgDiv.innerHTML = `
+    <span class="sender">${type === 'received' ? 'Unknown' : 'You'}</span>
+    ${text}
+  `;
+  container.appendChild(msgDiv);
+  container.scrollTop = container.scrollHeight;
+  
+  if (save) {
+    gameState.chatHistory.push({ text, type });
+  }
+}
+
 function handleGlobalClick(event) {
   // Close Start Menu
   if (!startMenu.contains(event.target) && !startButton.contains(event.target)) {
@@ -1438,22 +1786,46 @@ iconButtons.forEach((button) =>
     }
   })
 );
-// Update start menu buttons selector since structure changed
-const newStartMenuButtons = document.querySelectorAll(".start-menu__apps button");
-newStartMenuButtons.forEach((button) =>
-  button.addEventListener("click", () => {
-    openApp(button.dataset.app);
-    toggleStartMenu();
-  })
-);
+// Render Start Menu dynamically
+renderStartMenu();
 
 updateClock();
 setInterval(updateClock, 15_000);
 // updateStatusBar(); // Removed as status bar is gone
 
 function initializeDesktop() {
-  // Launch one window to make the scene feel alive.
-  // openApp("browser");
+  // Restore installed apps
+  if (gameState.torInstalled) {
+    apps.tor = hiddenApps.tor;
+    apps.browser = hiddenApps.browser;
+    renderStartMenu();
+    
+    // Add Desktop Icon
+    const desktop = document.getElementById("desktop");
+    const iconGrid = desktop.querySelector(".icon-grid");
+    
+    if (iconGrid && !iconGrid.querySelector('[data-app="tor"]')) {
+        const torBtn = document.createElement("button");
+        torBtn.className = "desktop-icon";
+        torBtn.dataset.app = "tor";
+        torBtn.innerHTML = `
+          <span class="icon-symbol">🧅</span>
+          <span class="icon-label">Tor Client</span>
+        `;
+        torBtn.addEventListener("dblclick", () => openApp("tor"));
+        torBtn.addEventListener("keydown", (e) => {
+          if (e.key === "Enter") openApp("tor");
+        });
+        iconGrid.appendChild(torBtn);
+    }
+  }
+
+  // Restore open apps
+  if (gameState.openApps && gameState.openApps.length > 0) {
+    gameState.openApps.forEach(appState => {
+      openApp(appState.key, appState);
+    });
+  }
 }
 
 initializeDesktop();

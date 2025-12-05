@@ -39,18 +39,6 @@
   <div id="desktop-screen" style="display: none;">
     <div class="desktop" id="desktop">
       <div class="icon-grid">
-        <button class="desktop-icon" data-app="browser">
-          <span class="icon-symbol">⬤</span>
-          <span class="icon-label">Deep Web Browser</span>
-        </button>
-        <button class="desktop-icon" data-app="tor">
-          <span class="icon-symbol">🧅</span>
-          <span class="icon-label">Tor Client</span>
-        </button>
-        <button class="desktop-icon" data-app="files">
-          <span class="icon-symbol">🗁</span>
-          <span class="icon-label">Archive</span>
-        </button>
         <button class="desktop-icon" data-app="notes">
           <span class="icon-symbol">✎</span>
           <span class="icon-label">Poznámkový Blok</span>
@@ -128,6 +116,21 @@
     <!-- Layer for popups, modals, and threat visuals -->
     <div id="popupLayer" aria-hidden="true"></div>
     <div id="threatOverlay" aria-hidden="true"></div>
+    
+    <!-- Notification Toast -->
+    <div id="notification-toast" class="notification-toast" style="display: none;">
+      <div class="notification-header">
+        <span class="notification-title">Secure Messenger</span>
+        <button class="notification-close">✕</button>
+      </div>
+      <div class="notification-body">
+        <div class="notification-icon">💬</div>
+        <div class="notification-content">
+          <strong>Unknown User</strong>
+          <p>Jsi tam? Musíme mluvit. Je to naléhavé.</p>
+        </div>
+      </div>
+    </div>
   </div>
 
   <div class="start-menu" id="startMenu" aria-hidden="true">
@@ -139,22 +142,8 @@
       <button class="sidebar-btn user-btn" title="User">👤</button>
     </div>
     <div class="start-menu__content">
-      <div class="start-menu__apps">
-        <button data-app="browser">
-          <span class="app-icon">⬤</span> Deep Web Browser
-        </button>
-        <button data-app="tor">
-          <span class="app-icon">🧅</span> Tor Client
-        </button>
-        <button data-app="files">
-          <span class="app-icon">🗁</span> Archive
-        </button>
-        <button data-app="notes">
-          <span class="app-icon">✎</span> Poznámkový Blok
-        </button>
-        <button data-app="paint">
-          <span class="app-icon">🎨</span> Studio
-        </button>
+      <div class="start-menu__apps" id="start-menu-list">
+        <!-- Apps will be rendered here -->
       </div>
     </div>
 
@@ -175,8 +164,9 @@
       <header class="window__header">
         <div class="window__title"></div>
         <div class="window__actions">
-          <button class="window__btn window__btn--min" aria-label="Minimize">&#8722;</button>
-          <button class="window__btn window__btn--close" aria-label="Close">&#10005;</button>
+          <button class="window__btn window__btn--min" aria-label="Minimize">─</button>
+          <button class="window__btn window__btn--max" aria-label="Maximize">◻</button>
+          <button class="window__btn window__btn--close" aria-label="Close">✕</button>
         </div>
       </header>
       <div class="window__content"></div>
