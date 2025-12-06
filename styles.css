@@ -1360,88 +1360,119 @@ body {
 #power-screen {
   position: fixed;
   inset: 0;
-  background-color: #000;
   z-index: 10000;
   display: flex;
-  justify-content: center;
-  align-items: center;
-  flex-direction: column;
-  transition: opacity 0.5s ease;
-}
-
-#power-btn {
-  background: transparent;
-  border: 2px solid var(--accent);
-  color: var(--accent);
-  padding: 2rem;
-  border-radius: 50%;
-  cursor: pointer;
-  display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 1rem;
-  transition: all 0.3s ease;
-  box-shadow: 0 0 15px var(--accent);
-  width: 150px;
-  height: 150px;
   justify-content: center;
+  color: #f4f7ff;
+  font-family: "Segoe UI", "Space Grotesk", sans-serif;
+  transition: transform 0.6s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.5s ease;
+  background: radial-gradient(circle at 20% 20%, rgba(68, 138, 255, 0.25), transparent 55%),
+    radial-gradient(circle at 80% 10%, rgba(0, 122, 204, 0.35), transparent 40%),
+    linear-gradient(135deg, #040b1d 0%, #071736 45%, #021129 100%);
+  overflow: hidden;
+  transform: translateY(0);
 }
 
-#power-btn:hover {
-  background: rgba(142, 242, 255, 0.1);
-  box-shadow: 0 0 30px var(--accent), inset 0 0 10px var(--accent);
-  transform: scale(1.05);
+#power-screen.power-screen--dragging {
+  transition: none;
+  cursor: ns-resize;
 }
 
-.power-icon {
-  font-size: 3rem;
-  line-height: 1;
+#power-screen.power-screen--slide {
+  transform: translateY(-100%);
+  opacity: 0;
+  pointer-events: none;
 }
 
-.power-text {
-  font-size: 0.8rem;
-  letter-spacing: 2px;
-  font-weight: 600;
+#power-screen::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(120deg, rgba(255, 255, 255, 0.04), transparent 50%);
+  pointer-events: none;
 }
+
+.power-lock {
+  text-align: center;
+  position: relative;
+  z-index: 1;
+}
+
+.power-time {
+  font-size: clamp(3.5rem, 8vw, 6.4rem);
+  font-weight: 200;
+  letter-spacing: -0.04em;
+}
+
+.power-date {
+  margin-top: 0.25rem;
+  font-size: clamp(1rem, 2vw, 1.6rem);
+  text-transform: capitalize;
+  color: rgba(244, 247, 255, 0.85);
+}
+
+.power-hint {
+  margin-top: 1.5rem;
+  font-size: 0.95rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(244, 247, 255, 0.65);
+}
+
 
 #login-screen {
   position: fixed;
   inset: 0;
-  background: radial-gradient(circle at center, #1a2a4a 0%, #050910 100%);
+  background: radial-gradient(circle at 30% 20%, rgba(52, 105, 214, 0.4), transparent 55%),
+    linear-gradient(160deg, #06132c 0%, #071e3c 45%, #030712 100%);
   z-index: 9999;
   display: flex;
+  flex-direction: column;
   justify-content: center;
   align-items: center;
   color: var(--text);
   transition: opacity 0.5s ease;
+  overflow: hidden;
 }
 
 .login-container {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 1.5rem;
-  width: 300px;
-  animation: fadeIn 1s ease-out;
+  gap: 1.1rem;
+  width: 100%;
+  animation: fadeIn 0.8s ease-out;
 }
 
 .user-avatar {
-  width: 100px;
-  height: 100px;
-  background: var(--bg-2);
-  border: 2px solid var(--accent);
+  width: 96px;
+  height: 96px;
+  background: linear-gradient(180deg, rgba(90, 126, 255, 0.3), rgba(102, 63, 214, 0.35));
+  border: 2px solid rgba(142, 242, 255, 0.6);
   border-radius: 50%;
   display: flex;
   justify-content: center;
   align-items: center;
   font-size: 3rem;
-  box-shadow: 0 0 20px rgba(0,0,0,0.5);
+  box-shadow: 0 10px 35px rgba(0, 0, 0, 0.45);
+  color: #fff;
 }
 
 .user-name {
-  font-size: 1.5rem;
-  font-weight: 500;
-  letter-spacing: 1px;
+  font-size: 1.4rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.login-hint {
+  color: rgba(255, 255, 255, 0.65);
+  font-size: 0.9rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  margin: -0.2rem 0 0.3rem;
 }
 
 .password-wrapper {
@@ -1453,9 +1484,9 @@ body {
 
 #login-password {
   width: 100%;
-  background: rgba(0, 0, 0, 0.3);
-  border: 1px solid var(--muted);
-  padding: 0.8rem 2.5rem 0.8rem 1rem; /* Added padding-right for the button */
+  background: rgba(5, 9, 16, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  padding: 0.85rem 2.5rem 0.85rem 1rem;
   border-radius: 4px;
   color: var(--text);
   font-family: inherit;
@@ -1485,35 +1516,120 @@ body {
 }
 
 #login-password:focus {
-  border-color: var(--accent);
-  box-shadow: 0 0 10px rgba(142, 242, 255, 0.2);
+  border-color: rgba(142, 242, 255, 0.85);
+  box-shadow: 0 0 0 3px rgba(142, 242, 255, 0.18);
 }
 
 .login-btn {
-  background: rgba(142, 242, 255, 0.1);
-  border: 1px solid var(--accent);
-  color: var(--accent);
-  padding: 0.6rem 2rem;
-  border-radius: 4px;
+  align-self: stretch;
+  background: linear-gradient(90deg, rgba(82, 139, 255, 0.85), rgba(142, 242, 255, 0.9));
+  border: none;
+  color: #041020;
+  padding: 0.7rem 2rem;
+  border-radius: 999px;
   cursor: pointer;
   font-family: inherit;
   font-weight: 600;
-  letter-spacing: 1px;
-  transition: all 0.2s ease;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
   margin-top: 0.5rem;
 }
 
 .login-btn:hover {
-  background: var(--accent);
-  color: var(--bg-1);
-  box-shadow: 0 0 15px rgba(142, 242, 255, 0.4);
+  transform: translateY(-1px);
+  box-shadow: 0 12px 25px rgba(82, 139, 255, 0.35);
 }
 
 .login-status {
   height: 20px;
-  color: var(--accent);
+  color: rgba(142, 242, 255, 0.9);
   font-size: 0.9rem;
   text-align: center;
+}
+
+.login-footer {
+  width: min(900px, 96vw);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 2.5rem;
+  color: rgba(255, 255, 255, 0.65);
+  font-size: 0.85rem;
+  letter-spacing: 0.08em;
+}
+
+.login-footer-left {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.login-footer-right {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.login-footer-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: transparent;
+  color: #f4f7ff;
+  font-size: 1.1rem;
+  cursor: pointer;
+  transition: border-color 0.2s ease, transform 0.2s ease;
+}
+
+.login-footer-icon:hover {
+  border-color: rgba(142, 242, 255, 0.9);
+  transform: translateY(-1px);
+}
+
+.login-power-menu {
+  position: absolute;
+  right: 8vw;
+  bottom: 120px;
+  background: rgba(4, 9, 18, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 12px;
+  box-shadow: 0 20px 35px rgba(0, 0, 0, 0.4);
+  display: none;
+  flex-direction: column;
+  min-width: 200px;
+  z-index: 2;
+}
+
+.login-power-menu.visible {
+  display: flex;
+}
+
+.login-power-menu button {
+  background: transparent;
+  border: none;
+  color: #f4f7ff;
+  text-align: left;
+  padding: 0.9rem 1.25rem;
+  font-size: 0.95rem;
+  cursor: pointer;
+  letter-spacing: 0.05em;
+}
+
+.login-power-menu button:hover {
+  background: rgba(142, 242, 255, 0.08);
+}
+
+@media (max-width: 640px) {
+  .login-footer {
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .login-power-menu {
+    right: 4vw;
+    bottom: 100px;
+  }
 }
 
 @keyframes fadeIn {
@@ -1573,12 +1689,14 @@ body {
   background: #fff;
   color: #333;
   font-family: "Segoe UI", sans-serif;
+  position: relative;
 }
 
 .browser-chrome {
   background: #dfe1e5;
   display: flex;
   flex-direction: column;
+  position: relative;
 }
 
 .chrome-tabs {
@@ -1783,11 +1901,137 @@ body {
   background: rgba(0,0,0,0.08);
 }
 
+.chrome-menu-panel {
+  position: absolute;
+  right: 12px;
+  top: 72px;
+  width: 220px;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 14px 30px rgba(0,0,0,0.18);
+  border: 1px solid rgba(0,0,0,0.08);
+  padding: 6px 0;
+  display: none;
+  flex-direction: column;
+  z-index: 10;
+}
+
+.chrome-menu-panel.open {
+  display: flex;
+}
+
+.chrome-menu-panel__item {
+  background: transparent;
+  border: none;
+  width: 100%;
+  text-align: left;
+  padding: 10px 18px;
+  font-size: 0.9rem;
+  color: #202124;
+  cursor: pointer;
+}
+
+.chrome-menu-panel__item:hover {
+  background: rgba(26,115,232,0.08);
+}
+
 .browser-main {
   flex: 1;
   overflow: auto;
   background: #fff;
   position: relative;
+}
+
+.source-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.68);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+  z-index: 20;
+  overflow: auto;
+}
+
+.source-dialog {
+  width: min(840px, 95vw);
+  max-height: 85vh;
+  background: #1f1f24;
+  color: #f6f7fb;
+  border: 1px solid #3c3f46;
+  box-shadow: 0 12px 32px rgba(0,0,0,0.65);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: 0;
+}
+
+.source-dialog__header {
+  padding: 14px 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  background: linear-gradient(180deg, #2b2d34 0%, #23242a 100%);
+  border-bottom: 1px solid #3c3f46;
+}
+
+.source-dialog__eyebrow {
+  font-size: 0.7rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #a0a9bd;
+}
+
+.source-dialog__title {
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+
+.source-close {
+  background: #2f3138;
+  border: 1px solid #44474f;
+  color: #fafafa;
+  width: 34px;
+  height: 34px;
+  font-size: 0.95rem;
+  cursor: pointer;
+  border-radius: 0;
+}
+
+.source-close:hover {
+  background: #3b3e47;
+}
+
+.source-dialog__meta {
+  padding: 10px 18px;
+  background: #191a20;
+  font-family: "Segoe UI", sans-serif;
+  font-size: 0.78rem;
+  color: #9aa2b4;
+  border-bottom: 1px solid #2d2f36;
+}
+
+.source-dialog__code {
+  margin: 0;
+  padding: 16px 18px;
+  background: #111217;
+  font-family: "Consolas", "Cascadia Code", monospace;
+  font-size: 0.85rem;
+  line-height: 1.45;
+  overflow: auto;
+  white-space: pre;
+  flex: 1;
+  color: #f1f2f4;
+}
+
+.source-dialog__footer {
+  padding: 10px 18px 14px;
+  background: #1f2026;
+  font-size: 0.75rem;
+  color: #9aa2b4;
+  border-top: 1px solid #2d2f36;
 }
 
 /* Tor Connect Screen */

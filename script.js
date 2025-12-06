@@ -35,11 +35,12 @@ const alertStatusEl = document.getElementById("alertStatus");
 
 // --- Power & Login Logic ---
 const powerScreen = document.getElementById("power-screen");
-const powerBtn = document.getElementById("power-btn");
 const loginScreen = document.getElementById("login-screen");
 const loginPassword = document.getElementById("login-password");
 const desktopScreen = document.getElementById("desktop-screen");
 const loginStatus = document.getElementById("login-status");
+const loginPowerMenu = document.getElementById("loginPowerMenu");
+const loginPowerBtn = document.querySelector('[data-role="login-power"]');
 
 const loginSubmitBtn = document.getElementById("login-submit-btn");
 const togglePasswordBtn = document.getElementById("toggle-password");
@@ -56,27 +57,30 @@ const audioManager = (() => {
     return { el, baseVolume: volume, src, oneShot };
   };
 
-  // Small pool for keyboard to avoid stutter and still allow rapid presses
-  const keyboardPool = Array.from({ length: 3 }, () => new Audio("fx/keyboard-type.wav"));
-  keyboardPool.forEach(a => { a.volume = 0.7; });
+  const keyboardPool = Array.from({ length: 3 }, () => new Audio('fx/keyboard-type.wav'));
+  keyboardPool.forEach((audio) => {
+    audio.volume = 0.7;
+  });
   let keyboardIndex = 0;
 
   const sounds = {
-    ambiance: makeSound("fx/ambiance.wav", { loop: true, volume: 0.45 }),
-    keyboard: makeSound("fx/keyboard-type.wav", { loop: false, volume: 0.7, oneShot: false }),
-    mouseClick: makeSound("fx/mouse-click.flac", { loop: false, volume: 0.7 }),
-    notification: makeSound("fx/notification.wav", { loop: false, volume: 0.9 }),
-    pcStart: makeSound("fx/pc-start.wav", { loop: true, volume: 0.7 }),
-    systemLogin: makeSound("fx/system-login.wav", { loop: false, volume: 0.8 }),
+    ambiance: makeSound('fx/ambiance.wav', { loop: true, volume: 0.45 }),
+    keyboard: makeSound('fx/keyboard-type.wav', { loop: false, volume: 0.7 }),
+    mouseClick: makeSound('fx/mouse-click.flac', { loop: false, volume: 0.7 }),
+    notification: makeSound('fx/notification.wav', { loop: false, volume: 0.9 }),
+    pcStart: makeSound('fx/pc-start.wav', { loop: true, volume: 0.7 }),
+    systemLogin: makeSound('fx/system-login.wav', { loop: false, volume: 0.8 }),
   };
 
   let masterVolume = 1;
 
   const applyVolume = () => {
-    Object.values(sounds).forEach((s) => {
-      s.el.volume = (s.baseVolume ?? 1) * masterVolume;
+    Object.values(sounds).forEach((sound) => {
+      sound.el.volume = (sound.baseVolume ?? 1) * masterVolume;
     });
-    keyboardPool.forEach(a => { a.volume = 0.7 * masterVolume; });
+    keyboardPool.forEach((audio) => {
+      audio.volume = 0.7 * masterVolume;
+    });
   };
 
   const setVolume = (val) => {
@@ -87,13 +91,13 @@ const audioManager = (() => {
   const play = (name, { restart = true, loop } = {}) => {
     const sound = sounds[name];
     if (!sound) return;
-    if (name === "keyboard") {
-      const a = keyboardPool[keyboardIndex];
+    if (name === 'keyboard') {
+      const audio = keyboardPool[keyboardIndex];
       keyboardIndex = (keyboardIndex + 1) % keyboardPool.length;
       try {
-        a.currentTime = 0;
-        a.play().catch(() => {});
-      } catch (e) {}
+        audio.currentTime = 0;
+        audio.play().catch(() => {});
+      } catch (err) {}
       return;
     }
     if (sound.oneShot && !sound.el.loop) {
@@ -102,7 +106,7 @@ const audioManager = (() => {
       shot.play().catch(() => {});
       return;
     }
-    if (typeof loop === "boolean") sound.el.loop = loop;
+    if (typeof loop === 'boolean') sound.el.loop = loop;
     if (restart) sound.el.currentTime = 0;
     sound.el.volume = (sound.baseVolume ?? 1) * masterVolume;
     sound.el.play().catch(() => {});
@@ -119,27 +123,161 @@ const audioManager = (() => {
 })();
 
 if (togglePasswordBtn && loginPassword) {
-  togglePasswordBtn.addEventListener("click", () => {
-    const type = loginPassword.getAttribute("type") === "password" ? "text" : "password";
-    loginPassword.setAttribute("type", type);
-    togglePasswordBtn.textContent = type === "password" ? "👁️" : "🔒";
+  togglePasswordBtn.addEventListener('click', () => {
+    const type = loginPassword.getAttribute('type') === 'password' ? 'text' : 'password';
+    loginPassword.setAttribute('type', type);
+    togglePasswordBtn.textContent = type === 'password' ? '👁️' : '🔒';
   });
 }
 
-if (powerBtn) {
-  powerBtn.addEventListener("click", () => {
-    // Show login screen immediately behind power screen
-    loginScreen.style.display = "flex";
-    loginScreen.style.opacity = "1"; // Ensure it's visible
-    
-    // Fade out power screen
-    powerScreen.style.opacity = "0";
-    audioManager.play("pcStart", { restart: true, loop: true });
-    
+let powerScreenDismissed = false;
+let powerDragStartY = null;
+let powerDragOffset = 0;
+let powerDragActive = false;
+
+function exitPowerScreen(options = {}) {
+  const { preserveDragPosition = false } = options;
+  if (!powerScreen || powerScreenDismissed) return;
+  powerScreenDismissed = true;
+  powerScreen.classList.remove('power-screen--dragging');
+  if (!preserveDragPosition) {
+    powerScreen.style.transform = '';
+    powerScreen.style.opacity = '';
+  }
+  requestAnimationFrame(() => {
+    powerScreen.classList.add('power-screen--slide');
+    powerScreen.style.transform = '';
+    powerScreen.style.opacity = '';
+  });
+  if (loginScreen) {
+    loginScreen.style.display = 'flex';
+    loginScreen.style.opacity = '1';
+  }
+  audioManager.play('pcStart', { restart: true, loop: true });
+
+  setTimeout(() => {
+    if (powerScreen) powerScreen.style.display = 'none';
+    loginPassword?.focus();
+  }, 600);
+}
+
+function resetPowerDrag() {
+  powerDragActive = false;
+  powerDragStartY = null;
+  powerDragOffset = 0;
+  if (!powerScreenDismissed && powerScreen) {
+    powerScreen.style.transform = '';
+    powerScreen.style.opacity = '';
+    powerScreen.classList.remove('power-screen--dragging');
+  }
+}
+
+if (powerScreen && window.matchMedia('(pointer:fine), (pointer:coarse)').matches) {
+  powerScreen.addEventListener('pointerdown', (event) => {
+    if (powerScreenDismissed) return;
+    powerDragActive = true;
+    powerDragStartY = event.clientY;
+    powerDragOffset = 0;
+    powerScreen.classList.add('power-screen--dragging');
+    try {
+      powerScreen.setPointerCapture(event.pointerId);
+    } catch (err) {}
+  });
+
+  powerScreen.addEventListener('pointermove', (event) => {
+    if (!powerDragActive || powerScreenDismissed || powerDragStartY === null) return;
+    powerDragOffset = Math.max(0, powerDragStartY - event.clientY);
+    const clamped = Math.min(powerDragOffset, window.innerHeight);
+    powerScreen.style.transform = `translateY(-${clamped}px)`;
+    const fade = Math.max(0.2, 1 - clamped / (window.innerHeight * 0.85));
+    powerScreen.style.opacity = fade.toFixed(3);
+  });
+
+  const handlePointerRelease = (event) => {
+    if (!powerDragActive) return;
+    try {
+      powerScreen.releasePointerCapture(event.pointerId);
+    } catch (err) {}
+    const shouldExit = powerDragOffset > 140;
+    if (shouldExit) {
+      powerDragActive = false;
+      exitPowerScreen({ preserveDragPosition: true });
+    } else {
+      resetPowerDrag();
+    }
+  };
+
+  powerScreen.addEventListener('pointerup', handlePointerRelease);
+  powerScreen.addEventListener('pointercancel', () => {
+    resetPowerDrag();
+  });
+}
+
+window.addEventListener('keydown', (event) => {
+  if (powerScreenDismissed) return;
+  if (event.code === 'Space' || event.code === 'Enter') {
+    event.preventDefault();
+    resetPowerDrag();
+    exitPowerScreen();
+  }
+});
+
+function closeLoginPowerMenu() {
+  if (loginPowerMenu) {
+    loginPowerMenu.classList.remove('visible');
+    loginPowerMenu.setAttribute('aria-hidden', 'true');
+  }
+}
+
+function returnToPowerScreen(mode = 'sleep') {
+  if (!powerScreen) return;
+  closeLoginPowerMenu();
+  loginStatus && (loginStatus.textContent = '');
+  resetPowerDrag();
+  powerScreenDismissed = false;
+  powerScreen.classList.remove('power-screen--slide');
+  powerScreen.style.display = 'flex';
+  powerScreen.style.opacity = '1';
+  powerScreen.style.transform = 'translateY(0)';
+  powerScreen.classList.remove('power-screen--dragging');
+  if (loginScreen) {
+    loginScreen.style.opacity = '0';
     setTimeout(() => {
-      powerScreen.style.display = "none";
-      loginPassword.focus();
-    }, 500);
+      loginScreen.style.display = 'none';
+    }, 250);
+  }
+  audioManager.stop('pcStart');
+}
+
+function handleLoginPowerAction(action) {
+  if (!loginScreen) return;
+  closeLoginPowerMenu();
+  switch (action) {
+    case 'sleep':
+      returnToPowerScreen('sleep');
+      break;
+    case 'restart':
+      returnToPowerScreen('restart');
+      break;
+    case 'shutdown':
+      returnToPowerScreen('shutdown');
+      break;
+    default:
+      break;
+  }
+}
+
+if (loginPowerBtn && loginPowerMenu) {
+  loginPowerBtn.addEventListener('click', (event) => {
+    event.stopPropagation();
+    const isVisible = loginPowerMenu.classList.toggle('visible');
+    loginPowerMenu.setAttribute('aria-hidden', String(!isVisible));
+  });
+
+  loginPowerMenu.addEventListener('click', (event) => {
+    const action = event.target.closest('button')?.dataset.action;
+    if (!action) return;
+    handleLoginPowerAction(action);
   });
 }
 
@@ -692,6 +830,10 @@ const hiddenApps = {
         const loadingOverlay = container.querySelector('[data-role="loading"]');
         const loadingFill = container.querySelector('[data-role="loading-fill"]');
         const loadingLabel = container.querySelector('[data-role="loading-label"]');
+        const chromeChrome = container.querySelector('.browser-chrome');
+        const menuBtn = container.querySelector('.chrome-menu-btn');
+
+        let menuPanel = null;
 
         const browserState = {
           history: [],
@@ -750,6 +892,96 @@ const hiddenApps = {
           loadingOverlay.classList.remove('active');
           loadingFill.style.transition = 'none';
           loadingFill.style.width = '0%';
+        };
+
+        const escapeForMarkup = (str = '') => str
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&#39;');
+
+        const prettifyHtml = (html = '') => html
+          .replace(/></g, '>' + '\n<')
+          .trim();
+
+        const closeMenuPanel = () => {
+          if (menuPanel) menuPanel.classList.remove('open');
+        };
+
+        const ensureMenuPanel = () => {
+          if (embedded || menuPanel || !menuBtn || !chromeChrome) return;
+          menuPanel = document.createElement('div');
+          menuPanel.className = 'chrome-menu-panel';
+          menuPanel.innerHTML = `
+            <button type="button" class="chrome-menu-panel__item" data-action="view-source">View Page Source</button>
+          `;
+          chromeChrome.appendChild(menuPanel);
+          menuPanel.addEventListener('click', (event) => {
+            const action = event.target.closest('button')?.dataset.action;
+            if (!action) return;
+            event.stopPropagation();
+            if (action === 'view-source') {
+              openSourceViewer();
+            }
+          });
+        };
+
+        const toggleMenuPanel = (forcedState = null) => {
+          if (!menuPanel) return;
+          const shouldOpen = forcedState !== null ? forcedState : !menuPanel.classList.contains('open');
+          menuPanel.classList.toggle('open', shouldOpen);
+        };
+
+        const openSourceViewer = () => {
+          if (!view) return;
+          const existing = container.querySelector('.source-overlay');
+          existing?.remove();
+
+          const htmlPayload = view.innerHTML || '';
+          const prettyHtml = prettifyHtml(htmlPayload);
+          const activeId = gameState.currentPage || browserState.history[browserState.index] || 'about:tor';
+          const pageMeta = deepSearchPages[activeId];
+          const label = pageMeta?.title || pageMeta?.label || activeId;
+
+          const overlay = document.createElement('div');
+          overlay.className = 'source-overlay';
+          overlay.innerHTML = `
+            <div class="source-dialog" role="dialog" aria-label="Page source">
+              <header class="source-dialog__header">
+                <div>
+                  <div class="source-dialog__eyebrow">Page Source</div>
+                  <div class="source-dialog__title">${escapeForMarkup(label)}</div>
+                </div>
+                <button type="button" class="source-close" aria-label="Close source viewer">✕</button>
+              </header>
+              <div class="source-dialog__meta">${escapeForMarkup(activeId)}</div>
+              <pre class="source-dialog__code"><code>${escapeForMarkup(prettyHtml)}</code></pre>
+              <div class="source-dialog__footer">Press Esc or click the backdrop to close.</div>
+            </div>
+          `;
+          container.appendChild(overlay);
+
+          const closeOverlay = () => {
+            document.removeEventListener('keydown', handleEscClose);
+            overlay.remove();
+          };
+
+          const handleEscClose = (event) => {
+            if (event.key === 'Escape') {
+              event.preventDefault();
+              closeOverlay();
+            }
+          };
+
+          document.addEventListener('keydown', handleEscClose);
+
+          overlay.addEventListener('click', (event) => {
+            if (event.target === overlay) closeOverlay();
+          });
+          overlay.querySelector('.source-close')?.addEventListener('click', closeOverlay);
+
+          closeMenuPanel();
         };
 
         const finishNavigation = (target, options = {}) => {
@@ -994,6 +1226,20 @@ const hiddenApps = {
           goTo(addressBar.value);
         }
       });
+
+      if (!embedded && menuBtn) {
+        ensureMenuPanel();
+        menuBtn.addEventListener('click', (event) => {
+          event.stopPropagation();
+          toggleMenuPanel();
+        });
+        container.addEventListener('click', (event) => {
+          if (!menuPanel) return;
+          if (menuPanel.contains(event.target)) return;
+          if (event.target === menuBtn) return;
+          toggleMenuPanel(false);
+        });
+      }
 
       // initial render
       const initialTarget = window.__pendingBrowserTarget || startPage || 'about:tor';
@@ -2791,6 +3037,10 @@ function handleGlobalClick(event) {
   if (searchPopup && !searchPopup.contains(event.target) && !searchInput.contains(event.target)) {
     searchPopup.style.display = "none";
   }
+
+  if (loginPowerMenu && !loginPowerMenu.contains(event.target) && !loginPowerBtn?.contains(event.target)) {
+    closeLoginPowerMenu();
+  }
 }
 
 function updateClock() {
@@ -2799,19 +3049,30 @@ function updateClock() {
     hour: "2-digit",
     minute: "2-digit",
   });
-  const date = now.toLocaleDateString("cs-CZ", {
+  const shortDate = now.toLocaleDateString("cs-CZ", {
     day: "2-digit",
     month: "2-digit",
     year: "numeric"
+  });
+  const longDate = now.toLocaleDateString("cs-CZ", {
+    weekday: "long",
+    day: "numeric",
+    month: "long"
   });
   
   const clockEl = document.getElementById("taskbarClock");
   if (clockEl) {
     clockEl.innerHTML = `
       <div class="time">${time}</div>
-      <div class="date">${date}</div>
+      <div class="date">${shortDate}</div>
     `;
   }
+
+  const powerTimeEl = document.getElementById('powerTime');
+  if (powerTimeEl) powerTimeEl.textContent = time;
+
+  const powerDateEl = document.getElementById('powerDate');
+  if (powerDateEl) powerDateEl.textContent = longDate;
 }
 
 // --- Input SFX (keyboard + mouse) ---

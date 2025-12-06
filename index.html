@@ -12,10 +12,11 @@
 <body>
   <!-- Power Screen -->
   <div id="power-screen">
-    <button id="power-btn" aria-label="Zapnout systém">
-      <div class="power-icon">⏻</div>
-      <span class="power-text">INITIALIZE SYSTEM</span>
-    </button>
+    <div class="power-lock">
+      <div class="power-time" id="powerTime">09:41</div>
+      <div class="power-date" id="powerDate">sobota, 6. prosince</div>
+      <div class="power-hint">Potáhni nahoru myší nebo stiskni mezerník</div>
+    </div>
   </div>
 
   <!-- Dev Reset Button (Global) -->
@@ -26,16 +27,35 @@
 
   <!-- Login Screen -->
   <div id="login-screen" style="display: none;">
-    <div class="login-container">
-      <div class="user-avatar">👤</div>
-      <h2 class="user-name">Admin</h2>
-      <div class="password-wrapper">
-        <input type="password" id="login-password" placeholder="Enter Password" autocomplete="off">
-        <button id="toggle-password" aria-label="Show password">👁️</button>
-        <div class="password-cursor"></div>
+    <div class="login-pane">
+      <div class="login-container">
+        <div class="user-avatar">👤</div>
+        <h2 class="user-name">Admin</h2>
+        <p class="login-hint">Připojeno přes zabezpečený tunel</p>
+        <div class="password-wrapper">
+          <input type="password" id="login-password" placeholder="Enter Password" autocomplete="off">
+          <button id="toggle-password" aria-label="Show password">👁️</button>
+          <div class="password-cursor"></div>
+        </div>
+        <button id="login-submit-btn" class="login-btn">Přihlásit</button>
+        <div class="login-status" id="login-status"></div>
       </div>
-      <button id="login-submit-btn" class="login-btn">LOGIN</button>
-      <div class="login-status" id="login-status"></div>
+    </div>
+    <div class="login-footer">
+      <div class="login-footer-left">
+        <span>CES</span>
+        <span>Čeština (ČR)</span>
+      </div>
+      <div class="login-footer-right">
+        <button class="login-footer-icon" aria-label="Síť">🌐</button>
+        <button class="login-footer-icon" aria-label="Usnadnění přístupu">♿</button>
+        <button class="login-footer-icon" aria-label="Napájení" data-role="login-power">⏻</button>
+      </div>
+    </div>
+    <div class="login-power-menu" id="loginPowerMenu" aria-hidden="true">
+      <button type="button" data-action="sleep">Režim spánku</button>
+      <button type="button" data-action="restart">Restartovat</button>
+      <button type="button" data-action="shutdown">Vypnout</button>
     </div>
   </div>
 
