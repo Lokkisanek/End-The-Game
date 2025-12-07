@@ -8,10 +8,10 @@
 
 .ms-wrapper-flex {
   display: flex;
-    display: grid;
-    grid-template-columns: minmax(120px, 1fr) auto auto;
-    align-items: center;
-    gap: 0.75rem;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+:root {
   --bg-1: #0a1428;
   --bg-2: #15244b;
   --accent: #8ef2ff;
@@ -116,8 +116,9 @@ body {
   background: transparent;
   border: none;
   color: inherit;
-  flex-wrap: wrap;
-  justify-content: flex-end;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   gap: 0.6rem;
   padding: 0.8rem;
   border-radius: 1rem;
@@ -163,11 +164,10 @@ body {
   padding: 0;
   transform: none;
   border-radius: 0;
-    display: grid;
-    grid-template-columns: repeat(var(--ms-cols, 9), minmax(28px, clamp(32px, 4vw, 44px)));
-    gap: 2px;
-    justify-content: center;
-    margin: 0 auto;
+}
+
+.taskbar-left {
+  display: flex;
   align-items: center;
   height: 100%;
 }
@@ -1547,6 +1547,115 @@ body {
   pointer-events: auto;
 }
 
+.breather-door {
+  width: min(540px, 90vw);
+}
+
+.door-hold {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+  padding: 18px;
+  background: radial-gradient(circle at top, rgba(30,40,70,0.9), rgba(5,8,15,0.95));
+  border: 1px solid rgba(255,255,255,0.08);
+  box-shadow: 0 25px 60px rgba(0,0,0,0.5);
+  color: #e6edff;
+}
+
+.door-panel {
+  background: linear-gradient(180deg, #0d1524, #05080f);
+  border: 1px solid rgba(255,255,255,0.04);
+  border-radius: 12px;
+  padding: 24px;
+  position: relative;
+  min-height: 220px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.door-window {
+  position: absolute;
+  top: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 110px;
+  height: 60px;
+  border-radius: 8px;
+  background: radial-gradient(circle at 30% 30%, rgba(255,255,255,0.25), rgba(0,0,0,0.7));
+  border: 1px solid rgba(255,255,255,0.08);
+  box-shadow: inset 0 0 18px rgba(0,0,0,0.6);
+}
+
+.door-handle {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  border: 2px solid rgba(255,255,255,0.15);
+  background: rgba(255,255,255,0.04);
+  color: #fff;
+  font-weight: 600;
+  letter-spacing: 0.2em;
+  cursor: pointer;
+  transition: border-color 0.2s ease, background 0.2s ease;
+}
+
+.door-handle.is-active {
+  border-color: #63ff9f;
+  background: rgba(99,255,159,0.1);
+  box-shadow: 0 0 18px rgba(99,255,159,0.35);
+}
+
+.door-copy h3 {
+  margin: 0;
+  font-size: 1.3rem;
+}
+
+.door-copy p {
+  margin: 6px 0 16px;
+  color: #aeb9d7;
+  font-size: 0.95rem;
+}
+
+.door-meter {
+  width: 100%;
+  height: 10px;
+  border: 1px solid rgba(255,255,255,0.2);
+  background: rgba(255,255,255,0.05);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.door-meter__fill {
+  height: 100%;
+  width: 50%;
+  background: linear-gradient(90deg, #ff6961, #fdae4c);
+  transition: width 0.12s linear;
+}
+
+.door-meter__fill[data-state="stable"] {
+  background: linear-gradient(90deg, #63ff9f, #1aa756);
+}
+
+.door-meter__fill[data-state="strain"] {
+  background: linear-gradient(90deg, #ffd55c, #ff7b47);
+}
+
+.door-meter__fill[data-state="critical"] {
+  background: linear-gradient(90deg, #ff4d57, #b4162d);
+  animation: doorPulse 0.5s ease-in-out infinite;
+}
+
+@keyframes doorPulse {
+  0% { opacity: 1; }
+  50% { opacity: 0.5; }
+  100% { opacity: 1; }
+}
+
 .progress-app {
   display: flex;
   flex-direction: column;
@@ -2656,6 +2765,255 @@ body {
 }
 .market-card h4 { margin: 0; color: #e4e7ef; }
 .market-card p { margin: 0; color: #b9c3dc; font-size: 0.95rem; }
+.market-meta {
+  font-size: 0.82rem;
+  color: #9fb1d9;
+}
+
+.sensor-app {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px;
+  background: #060b16;
+  border: 1px solid rgba(255,255,255,0.05);
+  color: #e5edff;
+  height: 100%;
+}
+.sensor-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: flex-start;
+}
+.sensor-eyebrow {
+  text-transform: uppercase;
+  font-size: 0.72rem;
+  letter-spacing: 0.18em;
+  color: #78c7ff;
+}
+.sensor-title {
+  font-size: 1.3rem;
+  font-weight: 600;
+}
+.sensor-stock {
+  text-align: right;
+  font-size: 0.85rem;
+  color: #9fb1d9;
+}
+.sensor-stock strong {
+  display: block;
+  font-size: 1.4rem;
+  color: #fff;
+}
+.sensor-body {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+}
+.sensor-light {
+  width: 64px;
+  height: 64px;
+  border-radius: 12px;
+  background: #1d2a3f;
+  border: 1px solid rgba(255,255,255,0.08);
+  box-shadow: inset 0 0 18px rgba(0,0,0,0.6);
+  transition: background 0.25s ease, box-shadow 0.25s ease;
+}
+.sensor-light[data-state="clear"] {
+  background: radial-gradient(circle at 30% 30%, #63ff9f, #158f4d);
+  box-shadow: 0 0 25px rgba(99,255,159,0.25);
+}
+.sensor-light[data-state="alert"] {
+  background: radial-gradient(circle at 30% 30%, #ff6a7a, #931d33);
+  box-shadow: 0 0 30px rgba(255,90,110,0.45);
+  animation: sensorPulse 0.8s ease-in-out infinite;
+}
+.sensor-status {
+  font-size: 1.1rem;
+  letter-spacing: 0.2em;
+}
+.sensor-hint {
+  margin: 2px 0 0;
+  font-size: 0.9rem;
+  color: #9fb1d9;
+}
+.sensor-footer {
+  font-size: 0.8rem;
+  color: #8ca0c8;
+  border-top: 1px solid rgba(255,255,255,0.06);
+  padding-top: 10px;
+}
+
+@keyframes sensorPulse {
+  0% { opacity: 0.85; }
+  50% { opacity: 0.4; }
+  100% { opacity: 0.85; }
+}
+
+.miner-app {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 16px;
+  background: #0a0f1b;
+  color: #e6ecff;
+  height: 100%;
+}
+.miner-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+.miner-eyebrow {
+  text-transform: uppercase;
+  font-size: 0.75rem;
+  letter-spacing: 0.2em;
+  color: #7dd0ff;
+}
+.miner-title {
+  font-size: 1.4rem;
+  font-weight: 600;
+}
+.miner-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.miner-pill {
+  padding: 4px 14px;
+  border-radius: 0;
+  border: 1px solid rgba(255,255,255,0.18);
+  font-size: 0.8rem;
+  background: rgba(125,208,255,0.1);
+  color: #7dd0ff;
+}
+.miner-start {
+  border: 1px solid rgba(255,255,255,0.3);
+  background: rgba(255,255,255,0.05);
+  color: #e6ecff;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.75rem;
+  padding: 6px 16px;
+  border-radius: 0;
+  cursor: pointer;
+}
+.miner-start.is-active {
+  background: #18bfff;
+  border-color: #18bfff;
+  color: #041422;
+}
+.miner-split {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+.miner-channel {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 0;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.miner-channel__label {
+  display: flex;
+  justify-content: space-between;
+  font-weight: 600;
+  color: #9fb1d9;
+}
+.miner-channel__readout {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  line-height: 1.1;
+}
+.miner-flow {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: #6dd5ff;
+}
+.miner-channel input[type="range"] {
+  accent-color: #58c4ff;
+}
+.miner-channel-hint {
+  margin: 0;
+  font-size: 0.85rem;
+  color: #9aa7c7;
+  min-height: 1.4em;
+}
+.miner-placement {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 0;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.miner-placement__label {
+  display: flex;
+  justify-content: space-between;
+  font-weight: 600;
+  color: #9fb1d9;
+}
+.miner-bar {
+  position: relative;
+  height: 8px;
+  border: 1px solid rgba(255,255,255,0.15);
+  background: rgba(255,255,255,0.04);
+  border-radius: 0;
+  overflow: hidden;
+}
+.miner-bar__fill {
+  position: absolute;
+  inset: 0;
+  width: 0;
+  background: linear-gradient(90deg, #58c4ff, #18bfff);
+  transition: width 0.2s ease;
+}
+.miner-hint {
+  margin: 0;
+  font-size: 0.9rem;
+  color: #b2bedc;
+}
+.miner-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+}
+.miner-stat {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 0;
+  padding: 12px;
+}
+.miner-label {
+  font-size: 0.85rem;
+  color: #9fb1d9;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.miner-value {
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin-top: 6px;
+}
+.miner-sub {
+  font-size: 0.85rem;
+  color: #9aa7c7;
+  margin-top: 4px;
+}
+.miner-footnote {
+  margin: 0;
+  font-size: 0.85rem;
+  color: #8fa2c8;
+}
 
 .tor-home-logo {
   display: flex;

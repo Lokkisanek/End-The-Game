@@ -311,6 +311,11 @@ function stopAllThreats() {
   threatLevel = 0;
   gameState.isKidnapperActive = false;
   gameState.isBreatherActive = false;
+  if (breatherPendingTimeout) {
+    clearTimeout(breatherPendingTimeout);
+    breatherPendingTimeout = null;
+  }
+  clearMovementDetectorAlert();
   const overlay = document.getElementById('popupLayer');
   if (overlay) {
     overlay.innerHTML = '';
@@ -423,6 +428,71 @@ const state = {
   zIndex: 10,
   windows: new Map(),
 };
+
+const MOVEMENT_DETECTOR_COST = 12;
+const MOVEMENT_DETECTOR_WARNING_MS = 10_000;
+
+let movementDetectorAlarmInterval = null;
+let movementDetectorAudioCtx = null;
+let breatherPendingTimeout = null;
+
+function getLiquidResCoinBalance() {
+  return Number((gameState.resCoins || 0) + (gameState.cryptoMinerCarry || 0));
+}
+
+function spendResCoins(amount) {
+  let remaining = Math.max(0, Number(amount));
+  if (!Number.isFinite(remaining) || remaining <= 0) return true;
+
+  const carry = Math.min(gameState.cryptoMinerCarry || 0, remaining);
+  if (carry > 0) {
+    gameState.cryptoMinerCarry = Math.max(0, (gameState.cryptoMinerCarry || 0) - carry);
+    remaining = Math.round((remaining - carry) * 10) / 10;
+  }
+
+  if (remaining <= 0) return true;
+
+  const coins = Number(gameState.resCoins || 0);
+  if (coins < remaining - 0.0001) return false;
+
+  const updated = Math.max(0, Math.round((coins - remaining) * 10) / 10);
+  gameState.resCoins = updated;
+  return true;
+}
+
+const appWindowSizing = {
+  chat: () => ({ width: 440, height: 740 }),
+  notes: () => ({ width: 525, height: 500 }),
+  paint: () => ({ width: 860, height: 540 }),
+  timer: () => ({ width: 427, height: 240 }),
+  minesweeper: () => ({ width: 560, height: 620 }),
+  browser: () => ({ width: 920, height: 640 }),
+  tor: () => ({ width: 1435, height: 850 }),
+  links: () => ({ width: 525, height: 500 }),
+  resmarket: () => ({ width: 400, height: 700 }),
+  cryptominer: () => ({ width: 820, height: 540 }),
+  movementdetector: () => ({ width: 420, height: 360 }),
+};
+
+const defaultWindowSize = { width: 480, height: 360 };
+
+function formatWindowDimension(value) {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return `${value}px`;
+  }
+  if (typeof value === 'string' && value.trim().length > 0) {
+    return value.trim();
+  }
+  return null;
+}
+
+function getAppWindowSize(key) {
+  const entry = appWindowSizing[key];
+  const resolved = typeof entry === 'function' ? entry() : entry;
+  const width = formatWindowDimension(resolved?.width) || `${defaultWindowSize.width}px`;
+  const height = formatWindowDimension(resolved?.height) || `${defaultWindowSize.height}px`;
+  return { width, height };
+}
 
 // Editable list of 20 custom links. Update the `html` field of any entry to change
 // what gets rendered when the link opens inside the in-game window.
@@ -1802,38 +1872,292 @@ const hiddenApps = {
       `;
     }
   },
-  dosmarket: {
-    title: "DOSMarket",
-    icon: "₿",
+  resmarket: {
+    title: "ResMarket",
+    icon: "Ⓡ",
     render: (container) => {
+      const balance = Number((gameState.resCoins || 0) + (gameState.cryptoMinerCarry || 0)).toFixed(1);
+      const minerInstalled = !!gameState.cryptoMinerInstalled;
+      const detectorInstalled = !!gameState.movementDetectorInstalled;
+      const detectorCharges = Math.max(0, Number(gameState.movementDetectorCharges || 0));
+      const detectorAffordable = getLiquidResCoinBalance() >= MOVEMENT_DETECTOR_COST;
+      const detectorCtaLabel = detectorInstalled ? `Buy Sensor (${MOVEMENT_DETECTOR_COST} RC)` : `Install Sensor (${MOVEMENT_DETECTOR_COST} RC)`;
+      const minerButton = `
+        <button class="wizard-btn ${minerInstalled ? 'secondary' : 'primary'}" data-res-miner-download ${minerInstalled ? 'disabled' : ''}>
+          ${minerInstalled ? 'Installed' : 'Download'}
+        </button>
+      `;
+
       container.innerHTML = `
         <section class="market-app">
           <header class="market-header">
-            <div class="market-title">DOSMarket</div>
-            <div class="market-balance">Balance: <strong>${gameState.dosCoin} DOS</strong></div>
+            <div class="market-title">ResMarket</div>
+            <div class="market-balance">Balance: <strong data-res-balance>${balance} Res Coins</strong></div>
           </header>
           <div class="market-body">
             <p class="market-status">${gameState.torRunning ? 'Connected to Tor.' : 'Tor required.'}</p>
             <div class="market-grid">
               <article class="market-card">
-                <h4>Techno Archives</h4>
-                <p>Archivované dumpy s klíči. Potřebuje ověřený okruh.</p>
-                <button class="wizard-btn secondary" disabled>Locked</button>
+                <h4>Crypto Miner</h4>
+                <p>Low-power miner for idle rigs. Download the payload and slot it where the airflow is best.</p>
+                ${minerButton}
               </article>
               <article class="market-card">
-                <h4>Signal Dumps</h4>
-                <p>Nahrané logy z relays. Možné útržky čísel.</p>
-                <button class="wizard-btn secondary" disabled>Locked</button>
+                <h4>Movement Detector</h4>
+                <p>Burnable sensor pings Breather 5s ahead of arrival.</p>
+                <p class="market-meta">Modules on hand: <strong data-detector-stock>${detectorCharges}</strong></p>
+                <button class="wizard-btn ${detectorAffordable ? 'primary' : 'secondary'}" data-res-detector ${detectorAffordable ? '' : 'disabled'}>
+                  ${detectorCtaLabel}
+                </button>
               </article>
               <article class="market-card">
-                <h4>Hardware Keys</h4>
-                <p>Zabezpečené tokeny. Dočasně nedostupné.</p>
-                <button class="wizard-btn secondary" disabled>Offline</button>
+                <h4>VPN Service</h4>
+                <p>Tiered exit nodes with kill-switch automation. Specify tiering & monthly rate.</p>
+                <button class="wizard-btn secondary" disabled>Plan Required</button>
+              </article>
+              <article class="market-card">
+                <h4>WiFi Crack Tool</h4>
+                <p>Automates handshake capture + key brute-force. Needs scope + cost confirmation.</p>
+                <button class="wizard-btn secondary" disabled>Awaiting Details</button>
               </article>
             </div>
           </div>
         </section>
       `;
+
+      const minerBtnEl = container.querySelector('[data-res-miner-download]');
+      if (minerBtnEl && !minerInstalled) {
+        minerBtnEl.addEventListener('click', (event) => {
+          event.preventDefault();
+          installCryptoMiner();
+        });
+      }
+
+      const detectorBtn = container.querySelector('[data-res-detector]');
+      detectorBtn?.addEventListener('click', (event) => {
+        event.preventDefault();
+        purchaseMovementDetector();
+      });
+
+      updateResCoinDisplays();
+    }
+  },
+  cryptominer: {
+    title: "Crypto Miner",
+    icon: "⛏",
+    render: (container) => {
+      ensureMinerSeeds();
+      const airflow = Math.min(100, Math.max(0, Number(gameState.cryptoMinerAirflow ?? 55)));
+      const power = Math.min(100, Math.max(0, Number(gameState.cryptoMinerPower ?? 45)));
+      const placement = computePlacementQuality(airflow, power);
+      gameState.cryptoMinerPlacement = placement;
+      const rate = computeCryptoMinerRate(placement);
+      const airFlowQuality = Math.round(evaluateMinerChannel(airflow, gameState.cryptoMinerAirSeed) * 100);
+      const powerFlowQuality = Math.round(evaluateMinerChannel(power, gameState.cryptoMinerPowerSeed) * 100);
+      const minted = Number(gameState.cryptoMinerMinted || 0).toFixed(1);
+      const balance = Number((gameState.resCoins || 0) + (gameState.cryptoMinerCarry || 0)).toFixed(1);
+      const statusLabel = gameState.cryptoMinerInstalled ? (gameState.cryptoMinerActive ? 'ONLINE' : 'IDLE') : 'OFFLINE';
+      const toggleLabel = gameState.cryptoMinerActive ? 'Pause Mining' : 'Start Mining';
+      container.innerHTML = `
+        <section class="miner-app">
+          <header class="miner-head">
+            <div>
+              <div class="miner-eyebrow">Rig Orchestrator</div>
+              <div class="miner-title">Placement & Hashrate</div>
+            </div>
+            <div class="miner-actions">
+              <div class="miner-pill" data-miner-status>${statusLabel}</div>
+              <button type="button" class="miner-start" data-miner-toggle>${toggleLabel}</button>
+            </div>
+          </header>
+          <div class="miner-split">
+            <article class="miner-channel">
+              <div class="miner-channel__label">
+                <span>Airflow Routing</span>
+                <div class="miner-channel__readout">
+                  <span data-miner-air-display>${airflow}%</span>
+                  <span class="miner-flow" data-miner-air-flow>${airFlowQuality}% flow</span>
+                </div>
+              </div>
+              <input type="range" min="0" max="100" value="${airflow}" data-miner-air aria-label="Airflow slider">
+              <p class="miner-channel-hint" data-miner-air-hint></p>
+            </article>
+            <article class="miner-channel">
+              <div class="miner-channel__label">
+                <span>Power Feed</span>
+                <div class="miner-channel__readout">
+                  <span data-miner-power-display>${power}%</span>
+                  <span class="miner-flow" data-miner-power-flow>${powerFlowQuality}% flow</span>
+                </div>
+              </div>
+              <input type="range" min="0" max="100" value="${power}" data-miner-power aria-label="Power slider">
+              <p class="miner-channel-hint" data-miner-power-hint></p>
+            </article>
+          </div>
+          <div class="miner-placement">
+            <div class="miner-placement__label">
+              Placement Score <span data-miner-score>${placement}%</span>
+            </div>
+            <div class="miner-bar" data-miner-bar>
+              <div class="miner-bar__fill" data-miner-bar-fill style="width:${placement}%"></div>
+            </div>
+            <p class="miner-hint" data-miner-hint></p>
+          </div>
+          <div class="miner-stats-grid">
+            <article class="miner-stat">
+              <div class="miner-label">Projected Yield</div>
+              <div class="miner-value" data-miner-rate>${rate} RC/min</div>
+              <div class="miner-sub">Auto-adjusted by randomized hotspots.</div>
+            </article>
+            <article class="miner-stat">
+              <div class="miner-label">Lifetime Minted</div>
+              <div class="miner-value" data-miner-earned>${minted} RC</div>
+              <div class="miner-sub">Live counter of the rig's total output.</div>
+            </article>
+            <article class="miner-stat">
+              <div class="miner-label">Wallet (live)</div>
+              <div class="miner-value" data-miner-balance>${balance} RC</div>
+              <div class="miner-sub">Includes pending fractional payouts.</div>
+            </article>
+            <article class="miner-stat">
+              <div class="miner-label">Last Deposit</div>
+              <div class="miner-value" data-miner-last>${gameState.cryptoMinerLastPayout ? 'Just now' : 'Initializing'}</div>
+              <div class="miner-sub">Rig pushes funds roughly every minute when active.</div>
+            </article>
+          </div>
+          <p class="miner-footnote">Hotspots se generují náhodně při každém běhu. Musíš je vystopovat kombinací airflow a power sliderů.</p>
+        </section>
+      `;
+
+      const sliderAir = container.querySelector('[data-miner-air]');
+      const sliderPower = container.querySelector('[data-miner-power]');
+      const combinedHint = container.querySelector('[data-miner-hint]');
+      const airHint = container.querySelector('[data-miner-air-hint]');
+      const powerHint = container.querySelector('[data-miner-power-hint]');
+      const barFill = container.querySelector('[data-miner-bar-fill]');
+      const placementLabel = container.querySelector('[data-miner-score]');
+      const rateEls = container.querySelectorAll('[data-miner-rate]');
+      const airOut = container.querySelector('[data-miner-air-display]');
+      const powerOut = container.querySelector('[data-miner-power-display]');
+      const airFlowOut = container.querySelector('[data-miner-air-flow]');
+      const powerFlowOut = container.querySelector('[data-miner-power-flow]');
+      const statusEl = container.querySelector('[data-miner-status]');
+      const toggleBtn = container.querySelector('[data-miner-toggle]');
+
+      const describeChannel = (score) => {
+        if (score > 0.8) return 'Sweet spot – systém je tichý a vychlazený.';
+        if (score > 0.55) return 'Stabilní chod, ale můžeš zkusit jemné doladění.';
+        if (score > 0.35) return 'Nestálé turbulence, výkon padá.';
+        return 'Plýtváš výkonem, najdi jinou konfiguraci.';
+      };
+
+      const describeCombined = (value) => {
+        if (value >= 85) return 'Rig je v perfektním tunelu. Hashrate letí nahoru.';
+        if (value >= 65) return 'Sladěné proudění i napětí, drž se v tom pásmu.';
+        if (value >= 45) return 'Použitelné, ale hotspoty budou jinde.';
+        return 'Tahle kombinace dusí rig. Přesuň oba slidery.';
+      };
+
+      const updatePlacement = (airValue, powerValue) => {
+        const sanitizedAir = Math.min(100, Math.max(0, Number(airValue)));
+        const sanitizedPower = Math.min(100, Math.max(0, Number(powerValue)));
+        if (sliderAir && sliderAir.value !== String(sanitizedAir)) sliderAir.value = String(sanitizedAir);
+        if (sliderPower && sliderPower.value !== String(sanitizedPower)) sliderPower.value = String(sanitizedPower);
+        gameState.cryptoMinerAirflow = sanitizedAir;
+        gameState.cryptoMinerPower = sanitizedPower;
+        const quality = computePlacementQuality(sanitizedAir, sanitizedPower);
+        gameState.cryptoMinerPlacement = quality;
+        const newRate = computeCryptoMinerRate(quality);
+        if (placementLabel) placementLabel.textContent = `${quality}%`;
+        if (airOut) airOut.textContent = `${sanitizedAir}%`;
+        if (powerOut) powerOut.textContent = `${sanitizedPower}%`;
+        if (barFill) barFill.style.width = `${quality}%`;
+        rateEls.forEach((node) => { node.textContent = `${newRate} RC/min`; });
+        const airScore = evaluateMinerChannel(sanitizedAir, gameState.cryptoMinerAirSeed);
+        if (airHint) {
+          airHint.textContent = describeChannel(airScore);
+        }
+        if (airFlowOut) {
+          airFlowOut.textContent = `${Math.round(airScore * 100)}% flow`;
+        }
+        const powerScore = evaluateMinerChannel(sanitizedPower, gameState.cryptoMinerPowerSeed);
+        if (powerHint) {
+          powerHint.textContent = describeChannel(powerScore);
+        }
+        if (powerFlowOut) {
+          powerFlowOut.textContent = `${Math.round(powerScore * 100)}% flow`;
+        }
+        if (combinedHint) combinedHint.textContent = describeCombined(quality);
+        updateResCoinDisplays();
+        persistState();
+      };
+
+      const updateStatusUI = () => {
+        const status = gameState.cryptoMinerInstalled ? (gameState.cryptoMinerActive ? 'ONLINE' : 'IDLE') : 'OFFLINE';
+        if (statusEl) statusEl.textContent = status;
+        if (toggleBtn) {
+          toggleBtn.textContent = gameState.cryptoMinerActive ? 'Pause Mining' : 'Start Mining';
+          toggleBtn.classList.toggle('is-active', gameState.cryptoMinerActive);
+        }
+      };
+
+      sliderAir?.addEventListener('input', (event) => {
+        updatePlacement(event.target.value, sliderPower?.value ?? power);
+      });
+
+      sliderPower?.addEventListener('input', (event) => {
+        updatePlacement(sliderAir?.value ?? airflow, event.target.value);
+      });
+
+      toggleBtn?.addEventListener('click', () => {
+        gameState.cryptoMinerActive = !gameState.cryptoMinerActive;
+        if (gameState.cryptoMinerActive) {
+          gameState.cryptoMinerLastPayout = Date.now();
+        }
+        updateStatusUI();
+        updateResCoinDisplays();
+        persistState();
+      });
+
+      updatePlacement(airflow, power);
+      updateStatusUI();
+      updateResCoinDisplays();
+    }
+  },
+  movementdetector: {
+    title: "Movement Detector",
+    icon: "🛡",
+    render: (container) => {
+      const charges = Math.max(0, Number(gameState.movementDetectorCharges || 0));
+      const status = gameState.movementDetectorStatus === 'alert' ? 'ALERT' : 'CLEAR';
+      const hint = status === 'ALERT'
+        ? 'Breather signature detected. Brace for contact.'
+        : 'No hostile movement within range.';
+      container.innerHTML = `
+        <section class="sensor-app">
+          <header class="sensor-head">
+            <div>
+              <div class="sensor-eyebrow">Intrusion Sensor</div>
+              <div class="sensor-title">Movement Detector</div>
+            </div>
+            <div class="sensor-stock">
+              <span>Single-use modules</span>
+              <strong data-sensor-stock>${charges}</strong>
+            </div>
+          </header>
+          <div class="sensor-body">
+            <div class="sensor-light" data-sensor-light role="status" aria-live="polite" aria-label="${status}"></div>
+            <div>
+              <div class="sensor-status" data-sensor-status>${status}</div>
+              <p class="sensor-hint" data-sensor-hint>${hint}</p>
+            </div>
+          </div>
+          <footer class="sensor-footer">
+            <p>Sensor blinks red ≈5s before Breather arrives. Each module is consumed on trigger.</p>
+          </footer>
+        </section>
+      `;
+      updateMovementDetectorDisplays();
     }
   },
 };
@@ -1862,6 +2186,7 @@ function ensureDesktopIcon(appKey, iconSymbol, label) {
 }
 
 let torInstalling = false;
+let minerInstalling = false;
 
 function showLinksPdf() {
   if (!gameState.linksInstalled) installLinksApp();
@@ -1880,12 +2205,12 @@ function showLinksPdf() {
   }
 }
 
-function installDosMarket() {
-  if (gameState.dosMarketInstalled) {
-    ensureAppDefinition('dosmarket');
-    ensureDesktopIcon('dosmarket', '₿', 'DOSMarket');
-    alert('DOSMarket už je nainstalovaný.');
-    openApp('dosmarket');
+function installResMarket() {
+  if (gameState.resMarketInstalled) {
+    ensureAppDefinition('resmarket');
+    ensureDesktopIcon('resmarket', 'Ⓡ', 'ResMarket');
+    alert('ResMarket už je nainstalovaný.');
+    openApp('resmarket');
     return;
   }
 
@@ -1894,9 +2219,9 @@ function installDosMarket() {
   box.className = 'door-popup';
 
   const steps = [
-    { title: 'DOSMarket Setup', body: 'Installer připravuje prostředí.', primary: 'Další' },
-    { title: 'Stažení balíčku', body: '<div class="install-bar"><div class="install-fill" id="dos-install-fill" style="width:0%"></div></div><p style="margin-top:8px;">Stahuji komponenty...</p>', primary: 'Čekej', installing: true },
-    { title: 'Hotovo', body: 'DOSMarket byl nainstalován. Najdeš ho na ploše i ve Start menu.', primary: 'Zavřít', done: true }
+    { title: 'ResMarket Setup', body: 'Installer připravuje prostředí.', primary: 'Další' },
+    { title: 'Stažení balíčku', body: '<div class="install-bar"><div class="install-fill" id="res-install-fill" style="width:0%"></div></div><p style="margin-top:8px;">Stahuji komponenty...</p>', primary: 'Čekej', installing: true },
+    { title: 'Hotovo', body: 'ResMarket byl nainstalován. Najdeš ho na ploše i ve Start menu.', primary: 'Zavřít', done: true }
   ];
 
   let stepIndex = 0;
@@ -1909,9 +2234,9 @@ function installDosMarket() {
         <div class="wizard-header">${step.title}</div>
         <div class="wizard-body">${step.body}</div>
         <div class="wizard-actions">
-          <button class="wizard-btn secondary" id="dos-cancel">Zrušit</button>
+          <button class="wizard-btn secondary" id="res-cancel">Zrušit</button>
           <div class="spacer"></div>
-          <button class="wizard-btn primary" id="dos-next">${step.primary}</button>
+          <button class="wizard-btn primary" id="res-next">${step.primary}</button>
         </div>
       </div>
     `;
@@ -1919,14 +2244,14 @@ function installDosMarket() {
   };
 
   const finishInstall = () => {
-    ensureAppDefinition('dosmarket');
-    gameState.dosMarketInstalled = true;
+    ensureAppDefinition('resmarket');
+    gameState.resMarketInstalled = true;
     renderStartMenu();
-    ensureDesktopIcon('dosmarket', '₿', 'DOSMarket');
+    ensureDesktopIcon('resmarket', 'Ⓡ', 'ResMarket');
   };
 
   const startProgress = () => {
-    const fill = box.querySelector('#dos-install-fill');
+    const fill = box.querySelector('#res-install-fill');
     let progress = 0;
     progressTimer = setInterval(() => {
       progress += Math.random() * 18 + 7;
@@ -1938,7 +2263,7 @@ function installDosMarket() {
         stepIndex = steps.length - 1;
         finishInstall();
         renderStep();
-          try { openApp('dosmarket'); } catch (e) { console.error(e); }
+          try { openApp('resmarket'); } catch (e) { console.error(e); }
       }
     }, 260);
   };
@@ -1964,8 +2289,8 @@ function installDosMarket() {
   };
 
   const attachHandlers = (step) => {
-    const btnNext = box.querySelector('#dos-next');
-    const btnCancel = box.querySelector('#dos-cancel');
+    const btnNext = box.querySelector('#res-next');
+    const btnCancel = box.querySelector('#res-cancel');
     btnNext?.addEventListener('click', () => handleNext(step));
     btnCancel?.addEventListener('click', () => closeWizard());
     if (step.installing && !progressTimer) startProgress();
@@ -1974,6 +2299,414 @@ function installDosMarket() {
   overlay.appendChild(box);
   overlay.style.pointerEvents = 'auto';
   renderStep();
+}
+
+function ensureMinerSeeds() {
+  if (typeof gameState.cryptoMinerAirSeed !== 'number') {
+    gameState.cryptoMinerAirSeed = Math.random();
+  }
+  if (typeof gameState.cryptoMinerPowerSeed !== 'number') {
+    gameState.cryptoMinerPowerSeed = Math.random();
+  }
+}
+
+function evaluateMinerChannel(value, seed) {
+  const normalized = Math.min(1, Math.max(0, Number(value) / 100));
+  const wave = Math.sin((normalized + seed) * Math.PI * 3);
+  const ripple = Math.sin((normalized * 2.3 + seed * 1.7) * Math.PI * 5) * 0.5;
+  const pocketCenter = (seed * 743) % 1;
+  const pocket = Math.max(0, 1 - Math.abs(normalized - pocketCenter) * 3);
+  const raw = (wave + ripple + pocket + 2) / 4;
+  return Math.min(1, Math.max(0, raw));
+}
+
+function computePlacementQuality(airflowInput = null, powerInput = null) {
+  ensureMinerSeeds();
+  const airflow = airflowInput ?? (typeof gameState.cryptoMinerAirflow === 'number' ? gameState.cryptoMinerAirflow : 55);
+  const power = powerInput ?? (typeof gameState.cryptoMinerPower === 'number' ? gameState.cryptoMinerPower : 45);
+  const airScore = evaluateMinerChannel(airflow, gameState.cryptoMinerAirSeed);
+  const powerScore = evaluateMinerChannel(power, gameState.cryptoMinerPowerSeed);
+  const jitter = Math.sin((airflow * 0.7 + power * 1.3 + gameState.cryptoMinerAirSeed * 100) * 0.08) * 5;
+  const combined = (airScore * 0.55 + powerScore * 0.45) * 100 + jitter;
+  return Math.round(Math.min(100, Math.max(5, combined)));
+}
+
+function computeCryptoMinerRate(placementInput = null) {
+  const placement = placementInput ?? computePlacementQuality();
+  return Math.round(3 + (placement / 100) * 17);
+}
+
+function formatMinerRelativeLabel() {
+  if (!gameState.cryptoMinerActive) return 'Paused';
+  if (!gameState.cryptoMinerLastPayout) return 'Initializing';
+  const diff = Date.now() - gameState.cryptoMinerLastPayout;
+  if (diff < 5_000) return 'Just now';
+  if (diff < 60_000) return `${Math.max(1, Math.round(diff / 1000))} s ago`;
+  const mins = Math.round(diff / 60_000);
+  return `${mins} min ago`;
+}
+
+function updateResCoinDisplays() {
+  ensureMinerSeeds();
+  const airflow = Math.min(100, Math.max(0, Number(gameState.cryptoMinerAirflow ?? 55)));
+  const power = Math.min(100, Math.max(0, Number(gameState.cryptoMinerPower ?? 45)));
+  const runningBalance = Number((gameState.resCoins || 0) + (gameState.cryptoMinerCarry || 0));
+  const balanceLabel = runningBalance.toFixed(1);
+  document.querySelectorAll('[data-res-balance]').forEach((node) => {
+    node.textContent = `${balanceLabel} Res Coins`;
+  });
+
+  const placement = Math.min(
+    100,
+    Math.max(0, Number(gameState.cryptoMinerPlacement ?? computePlacementQuality(airflow, power)))
+  );
+  const placementLabel = `${placement}%`;
+  document.querySelectorAll('[data-miner-score]').forEach((node) => {
+    node.textContent = placementLabel;
+  });
+  document.querySelectorAll('[data-miner-placement]').forEach((node) => {
+    node.textContent = placementLabel;
+  });
+  document.querySelectorAll('[data-miner-bar-fill]').forEach((node) => {
+    node.style.width = placementLabel;
+  });
+
+  const rate = computeCryptoMinerRate(placement);
+  document.querySelectorAll('[data-miner-rate]').forEach((node) => {
+    node.textContent = `${rate} RC/min`;
+  });
+
+  const minted = Number(gameState.cryptoMinerMinted || 0).toFixed(1);
+  document.querySelectorAll('[data-miner-earned]').forEach((node) => {
+    node.textContent = `${minted} RC`;
+  });
+
+  const airFlowPercent = Math.round(evaluateMinerChannel(airflow, gameState.cryptoMinerAirSeed) * 100);
+  document.querySelectorAll('[data-miner-air-flow]').forEach((node) => {
+    node.textContent = `${airFlowPercent}% flow`;
+  });
+
+  const powerFlowPercent = Math.round(evaluateMinerChannel(power, gameState.cryptoMinerPowerSeed) * 100);
+  document.querySelectorAll('[data-miner-power-flow]').forEach((node) => {
+    node.textContent = `${powerFlowPercent}% flow`;
+  });
+
+  document.querySelectorAll('[data-miner-balance]').forEach((node) => {
+    node.textContent = `${balanceLabel} RC`;
+  });
+
+  const lastLabel = formatMinerRelativeLabel();
+  document.querySelectorAll('[data-miner-last]').forEach((node) => {
+    node.textContent = lastLabel;
+  });
+
+  const status = gameState.cryptoMinerInstalled ? (gameState.cryptoMinerActive ? 'ONLINE' : 'IDLE') : 'OFFLINE';
+  document.querySelectorAll('[data-miner-status]').forEach((node) => {
+    node.textContent = status;
+  });
+  document.querySelectorAll('[data-miner-toggle]').forEach((node) => {
+    node.textContent = gameState.cryptoMinerActive ? 'Pause Mining' : 'Start Mining';
+    node.classList.toggle('is-active', !!gameState.cryptoMinerActive);
+  });
+
+  updateMovementDetectorDisplays();
+}
+
+function playMovementDetectorBeep() {
+  try {
+    if (!movementDetectorAudioCtx) {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (!AudioCtx) return;
+      movementDetectorAudioCtx = new AudioCtx();
+    }
+    const ctx = movementDetectorAudioCtx;
+    if (ctx.state === 'suspended' && typeof ctx.resume === 'function') {
+      ctx.resume().catch(() => {});
+    }
+    const now = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(820, now);
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.exponentialRampToValueAtTime(0.3, now + 0.04);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.45);
+    osc.connect(gain).connect(ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.5);
+  } catch (err) {
+    console.warn('Sensor beep failed', err);
+  }
+}
+
+function startMovementDetectorAlarm() {
+  if (movementDetectorAlarmInterval) return;
+  playMovementDetectorBeep();
+  movementDetectorAlarmInterval = setInterval(playMovementDetectorBeep, 900);
+}
+
+function stopMovementDetectorAlarm() {
+  if (movementDetectorAlarmInterval) {
+    clearInterval(movementDetectorAlarmInterval);
+    movementDetectorAlarmInterval = null;
+  }
+}
+
+function activateMovementDetectorAlert() {
+  gameState.movementDetectorStatus = 'alert';
+  updateMovementDetectorDisplays();
+  startMovementDetectorAlarm();
+}
+
+function clearMovementDetectorAlert() {
+  stopMovementDetectorAlarm();
+  if (gameState.movementDetectorStatus !== 'clear') {
+    gameState.movementDetectorStatus = 'clear';
+    updateMovementDetectorDisplays();
+  }
+}
+
+function updateMovementDetectorDisplays() {
+  const charges = Math.max(0, Number(gameState.movementDetectorCharges || 0));
+  const status = gameState.movementDetectorStatus === 'alert' ? 'alert' : 'clear';
+  const statusLabel = status === 'alert' ? 'ALERT' : 'CLEAR';
+  const hint = status === 'alert'
+    ? 'Breather signature detected. Brace for contact.'
+    : (gameState.movementDetectorInstalled ? 'No hostile movement within range.' : 'Purchase modules in ResMarket.');
+  const detectorInstalled = !!gameState.movementDetectorInstalled;
+  const detectorAffordable = getLiquidResCoinBalance() >= MOVEMENT_DETECTOR_COST;
+  const detectorCtaLabel = detectorInstalled
+    ? `Buy Sensor (${MOVEMENT_DETECTOR_COST} RC)`
+    : `Install Sensor (${MOVEMENT_DETECTOR_COST} RC)`;
+
+  document.querySelectorAll('[data-sensor-light]').forEach((node) => {
+    node.dataset.state = status;
+    node.setAttribute('aria-label', statusLabel);
+  });
+  document.querySelectorAll('[data-sensor-status]').forEach((node) => {
+    node.textContent = statusLabel;
+  });
+  document.querySelectorAll('[data-sensor-hint]').forEach((node) => {
+    node.textContent = hint;
+  });
+  document.querySelectorAll('[data-sensor-stock]').forEach((node) => {
+    node.textContent = charges;
+  });
+  document.querySelectorAll('[data-detector-stock]').forEach((node) => {
+    node.textContent = charges;
+  });
+  document.querySelectorAll('[data-res-detector]').forEach((button) => {
+    button.textContent = detectorCtaLabel;
+    button.disabled = !detectorAffordable;
+    button.classList.toggle('primary', detectorAffordable);
+    button.classList.toggle('secondary', !detectorAffordable);
+  });
+}
+
+function installCryptoMiner() {
+  if (!gameState.resMarketInstalled) {
+    installResMarket();
+    return;
+  }
+
+  if (gameState.cryptoMinerInstalled) {
+    ensureAppDefinition('cryptominer');
+    ensureDesktopIcon('cryptominer', '⛏', 'Crypto Miner');
+    openApp('cryptominer');
+    return;
+  }
+
+  if (minerInstalling) {
+    alert('Instalátor Crypto Mineru už běží.');
+    return;
+  }
+  minerInstalling = true;
+
+  const overlay = document.getElementById('popupLayer');
+  const box = document.createElement('div');
+  box.className = 'door-popup';
+
+  const steps = [
+    { title: 'Crypto Miner Loader', body: 'Stahuji závislosti a připravuji sandbox.', primary: 'Další' },
+    { title: 'Downloading Payload', body: '<div class="install-bar"><div class="install-fill" id="miner-install-fill" style="width:0%"></div></div><p style="margin-top:8px;">Přesouvám image do Res systému...</p>', primary: 'Čekej', installing: true },
+    { title: 'Hotovo', body: 'Miner je připravený. Otevři aplikaci a dolaď umístění rigů.', primary: 'Spustit', done: true }
+  ];
+
+  let stepIndex = 0;
+  let progressTimer = null;
+
+  const renderStep = () => {
+    const step = steps[stepIndex];
+    box.innerHTML = `
+      <div class="wizard">
+        <div class="wizard-header">${step.title}</div>
+        <div class="wizard-body">${step.body}</div>
+        <div class="wizard-actions">
+          <button class="wizard-btn secondary" id="miner-cancel">Zrušit</button>
+          <div class="spacer"></div>
+          <button class="wizard-btn primary" id="miner-next">${step.primary}</button>
+        </div>
+      </div>
+    `;
+    attachHandlers(step);
+  };
+
+  const finishInstall = () => {
+    ensureAppDefinition('cryptominer');
+    gameState.cryptoMinerInstalled = true;
+    if (typeof gameState.cryptoMinerAirflow !== 'number') gameState.cryptoMinerAirflow = 58;
+    if (typeof gameState.cryptoMinerPower !== 'number') gameState.cryptoMinerPower = 46;
+    if (typeof gameState.cryptoMinerAirSeed !== 'number') gameState.cryptoMinerAirSeed = Math.random();
+    if (typeof gameState.cryptoMinerPowerSeed !== 'number') gameState.cryptoMinerPowerSeed = Math.random();
+    if (typeof gameState.cryptoMinerPlacement !== 'number') {
+      gameState.cryptoMinerPlacement = computePlacementQuality(gameState.cryptoMinerAirflow, gameState.cryptoMinerPower);
+    }
+    gameState.cryptoMinerLastPayout = null;
+    gameState.cryptoMinerCarry = 0;
+    if (typeof gameState.cryptoMinerMinted !== 'number') gameState.cryptoMinerMinted = 0;
+    gameState.cryptoMinerActive = false;
+    renderStartMenu();
+    ensureDesktopIcon('cryptominer', '⛏', 'Crypto Miner');
+    startCryptoMinerLoop();
+    updateResCoinDisplays();
+    persistState();
+  };
+
+  const startProgress = () => {
+    const fill = box.querySelector('#miner-install-fill');
+    let progress = 0;
+    progressTimer = setInterval(() => {
+      progress += Math.random() * 20 + 8;
+      if (progress > 100) progress = 100;
+      if (fill) fill.style.width = `${progress}%`;
+      if (progress >= 100) {
+        clearInterval(progressTimer);
+        progressTimer = null;
+        stepIndex = steps.length - 1;
+        finishInstall();
+        renderStep();
+        try { openApp('cryptominer'); } catch (err) { console.error(err); }
+      }
+    }, 240);
+  };
+
+  const handleNext = (step) => {
+    if (step.installing && !progressTimer) {
+      startProgress();
+      return;
+    }
+    if (step.installing && progressTimer) return;
+    if (step.done) {
+      closeWizard();
+      return;
+    }
+    stepIndex = Math.min(stepIndex + 1, steps.length - 1);
+    renderStep();
+  };
+
+  const closeWizard = () => {
+    if (progressTimer) clearInterval(progressTimer);
+    box.remove();
+    overlay.style.pointerEvents = 'none';
+    minerInstalling = false;
+  };
+
+  const attachHandlers = (step) => {
+    const btnNext = box.querySelector('#miner-next');
+    const btnCancel = box.querySelector('#miner-cancel');
+    btnNext?.addEventListener('click', () => handleNext(step));
+    btnCancel?.addEventListener('click', () => closeWizard());
+    if (step.installing && !progressTimer) startProgress();
+  };
+
+  overlay.appendChild(box);
+  overlay.style.pointerEvents = 'auto';
+  renderStep();
+}
+
+let cryptoMinerTimer = null;
+
+function tickCryptoMiner() {
+  if (!gameState.cryptoMinerInstalled) {
+    gameState.cryptoMinerLastPayout = null;
+    updateResCoinDisplays();
+    return;
+  }
+
+  if (!gameState.cryptoMinerActive) {
+    updateResCoinDisplays();
+    return;
+  }
+
+  const now = Date.now();
+  const last = typeof gameState.cryptoMinerLastPayout === 'number' ? gameState.cryptoMinerLastPayout : now;
+  const elapsed = now - last;
+  if (elapsed <= 0) {
+    gameState.cryptoMinerLastPayout = now;
+    return;
+  }
+
+  const rate = computeCryptoMinerRate();
+  const earned = (rate * elapsed) / 60_000;
+  const currentMinted = typeof gameState.cryptoMinerMinted === 'number' ? gameState.cryptoMinerMinted : 0;
+  const mintedTotal = currentMinted + earned;
+  gameState.cryptoMinerMinted = Math.round(mintedTotal * 1000) / 1000;
+  gameState.cryptoMinerCarry = (gameState.cryptoMinerCarry || 0) + earned;
+  const payout = Math.floor(gameState.cryptoMinerCarry * 10) / 10;
+  if (payout >= 0.1) {
+    gameState.cryptoMinerCarry = Math.max(0, gameState.cryptoMinerCarry - payout);
+    const updatedBalance = Math.round(((gameState.resCoins || 0) + payout) * 10) / 10;
+    gameState.resCoins = updatedBalance;
+    updateResCoinDisplays();
+    persistState();
+  }
+
+  gameState.cryptoMinerLastPayout = now;
+  updateResCoinDisplays();
+}
+
+function startCryptoMinerLoop() {
+  if (cryptoMinerTimer) return;
+  cryptoMinerTimer = setInterval(() => {
+    try {
+      tickCryptoMiner();
+    } catch (err) {
+      console.error('Crypto miner tick failed', err);
+    }
+  }, 5_000);
+  tickCryptoMiner();
+}
+
+function ensureMovementDetectorApp() {
+  ensureAppDefinition('movementdetector');
+  ensureDesktopIcon('movementdetector', '🛡', 'Movement Detector');
+}
+
+function purchaseMovementDetector() {
+  if (getLiquidResCoinBalance() < MOVEMENT_DETECTOR_COST) {
+    alert('Res Coins nestačí. Vydělej víc a zkus to znovu.');
+    return;
+  }
+
+  if (!spendResCoins(MOVEMENT_DETECTOR_COST)) {
+    alert('Platba selhala, zkus to znova.');
+    return;
+  }
+
+  gameState.movementDetectorCharges = (gameState.movementDetectorCharges || 0) + 1;
+
+  if (!gameState.movementDetectorInstalled) {
+    gameState.movementDetectorInstalled = true;
+    ensureMovementDetectorApp();
+    renderStartMenu();
+  } else {
+    ensureMovementDetectorApp();
+  }
+
+  updateResCoinDisplays();
+  updateMovementDetectorDisplays();
+  persistState();
+  try { refreshApp('resmarket'); } catch (err) { console.warn('ResMarket refresh failed', err); }
 }
 
 function installLinksApp() {
@@ -2147,7 +2880,7 @@ const defaultGameState = {
   isKidnapperActive: false,
   isBreatherActive: false,
   keysFound: 0,
-  dosCoin: 100,
+  resCoins: 0,
   currentIP: "192.168.1.1",
   currentPage: "about:tor",
   torInstalled: false,
@@ -2155,7 +2888,20 @@ const defaultGameState = {
   currentNetwork: null, // { ssid }
   numericKeyFound: false,
   alerts: 0,
-  dosMarketInstalled: false,
+  resMarketInstalled: false,
+  cryptoMinerInstalled: false,
+  cryptoMinerPlacement: 62,
+  cryptoMinerLastPayout: null,
+  cryptoMinerCarry: 0,
+  cryptoMinerMinted: 0,
+  cryptoMinerActive: false,
+  cryptoMinerAirflow: 55,
+  cryptoMinerPower: 45,
+  cryptoMinerAirSeed: null,
+  cryptoMinerPowerSeed: null,
+  movementDetectorInstalled: false,
+  movementDetectorCharges: 0,
+  movementDetectorStatus: 'clear',
   torBriefingSent: false,
   linksInstalled: false,
   vpnTier: -1,
@@ -2202,6 +2948,67 @@ if (gameState.countdownActive && !gameState.countdownDeadline) {
   gameState.countdownActive = false;
   gameState.countdownDeadline = null;
   gameState.countdownTriggered = false;
+}
+
+if (typeof gameState.resMarketInstalled !== 'boolean' && typeof gameState.dosMarketInstalled === 'boolean') {
+  gameState.resMarketInstalled = gameState.dosMarketInstalled;
+  delete gameState.dosMarketInstalled;
+}
+
+if (Array.isArray(gameState.openApps)) {
+  gameState.openApps = gameState.openApps.map(app => (
+    app && app.key === 'dosmarket' ? { ...app, key: 'resmarket' } : app
+  ));
+}
+
+if (typeof gameState.resCoins !== 'number') {
+  if (typeof gameState.dosCoin === 'number') {
+    gameState.resCoins = gameState.dosCoin;
+  } else {
+    gameState.resCoins = 0;
+  }
+  delete gameState.dosCoin;
+}
+
+if (typeof gameState.cryptoMinerInstalled !== 'boolean') {
+  gameState.cryptoMinerInstalled = false;
+}
+if (typeof gameState.cryptoMinerCarry !== 'number') {
+  gameState.cryptoMinerCarry = 0;
+}
+if (typeof gameState.cryptoMinerMinted !== 'number') {
+  gameState.cryptoMinerMinted = 0;
+}
+if (typeof gameState.cryptoMinerLastPayout !== 'number') {
+  gameState.cryptoMinerLastPayout = null;
+}
+if (typeof gameState.cryptoMinerActive !== 'boolean') {
+  gameState.cryptoMinerActive = false;
+}
+if (typeof gameState.cryptoMinerAirflow !== 'number') {
+  gameState.cryptoMinerAirflow = 55;
+}
+if (typeof gameState.cryptoMinerPower !== 'number') {
+  gameState.cryptoMinerPower = 45;
+}
+if (typeof gameState.cryptoMinerAirSeed !== 'number') {
+  gameState.cryptoMinerAirSeed = Math.random();
+}
+if (typeof gameState.cryptoMinerPowerSeed !== 'number') {
+  gameState.cryptoMinerPowerSeed = Math.random();
+}
+if (typeof gameState.cryptoMinerPlacement !== 'number' || Number.isNaN(gameState.cryptoMinerPlacement)) {
+  gameState.cryptoMinerPlacement = computePlacementQuality(gameState.cryptoMinerAirflow, gameState.cryptoMinerPower);
+}
+
+if (typeof gameState.movementDetectorInstalled !== 'boolean') {
+  gameState.movementDetectorInstalled = false;
+}
+if (typeof gameState.movementDetectorCharges !== 'number' || Number.isNaN(gameState.movementDetectorCharges)) {
+  gameState.movementDetectorCharges = 0;
+}
+if (typeof gameState.movementDetectorStatus !== 'string') {
+  gameState.movementDetectorStatus = 'clear';
 }
 
 let shouldSave = true;
@@ -2658,7 +3465,7 @@ function startSequenceHack() {
     box.remove();
     if (success) {
       threatLevel = Math.max(0, threatLevel - 25);
-      gameState.dosCoin += 5;
+      gameState.resCoins = (gameState.resCoins || 0) + 5;
       incrementAlerts('Hack úspěšný');
     } else {
       threatLevel = Math.min(100, threatLevel + 10);
@@ -2707,7 +3514,7 @@ function startNumberHack() {
     overlay.style.pointerEvents = 'none';
     box.remove();
     threatLevel = Math.max(0, threatLevel - 15);
-    gameState.dosCoin += 10;
+    gameState.resCoins = (gameState.resCoins || 0) + 10;
     incrementAlerts('Hack bonus');
     checkThreats();
     updateStatusBar();
@@ -2793,48 +3600,111 @@ function triggerKidnapper() {
 }
 
 function triggerBreather() {
-  if (gameState.isBreatherActive) return;
+  if (gameState.isBreatherActive || breatherPendingTimeout) return;
+
+  const detectorsArmed = gameState.movementDetectorInstalled && (gameState.movementDetectorCharges || 0) > 0;
+  if (detectorsArmed) {
+    gameState.movementDetectorCharges = Math.max(0, (gameState.movementDetectorCharges || 0) - 1);
+    gameState.isBreatherActive = true;
+    activateMovementDetectorAlert();
+    updateMovementDetectorDisplays();
+    updateResCoinDisplays();
+    persistState();
+    try { refreshApp('resmarket'); } catch (err) { console.warn('ResMarket refresh failed', err); }
+    breatherPendingTimeout = setTimeout(() => {
+      breatherPendingTimeout = null;
+      startBreatherEncounter();
+    }, MOVEMENT_DETECTOR_WARNING_MS);
+    return;
+  }
+
   gameState.isBreatherActive = true;
-  let doorStrength = 100;
+  startBreatherEncounter();
+}
+
+function startBreatherEncounter() {
+  if (breatherPendingTimeout) {
+    clearTimeout(breatherPendingTimeout);
+    breatherPendingTimeout = null;
+  }
+
   const overlay = document.getElementById('popupLayer');
   const box = document.createElement('div');
-  box.className = 'door-popup';
-  box.innerHTML = `<div><strong>Someone at the door</strong><p>Drž klik, aby udržel dýchače venku</p><button id="hold-btn">Hold</button><div id="door-bar" style="height:10px;background:#222;border-radius:8px;margin-top:8px;"><div id="door-fill" style="height:10px;background:lime;width:100%;border-radius:8px;"></div></div></div>`;
+  box.className = 'door-popup breather-door';
+  box.innerHTML = `
+    <section class="door-hold">
+      <div class="door-panel">
+        <div class="door-window"></div>
+        <button type="button" class="door-handle" data-door-handle>
+          <span>HOLD</span>
+        </button>
+      </div>
+      <div class="door-copy">
+        <h3>Breather is forcing the door</h3>
+        <p>Press and hold the handle to keep the latch engaged.</p>
+        <div class="door-meter">
+          <div class="door-meter__fill" data-door-fill style="width:55%"></div>
+        </div>
+      </div>
+    </section>
+  `;
   overlay.appendChild(box);
   overlay.style.pointerEvents = 'auto';
-  const holdBtn = box.querySelector('#hold-btn');
-  const fill = box.querySelector('#door-fill');
+
+  const handle = box.querySelector('[data-door-handle]');
+  const fill = box.querySelector('[data-door-fill]');
+  let doorStrength = 55;
   let holding = false;
-  let holdInterval = null;
 
-  holdBtn.addEventListener('pointerdown', () => { holding = true; });
-  window.addEventListener('pointerup', () => { holding = false; });
+  const releaseHold = () => {
+    holding = false;
+    handle?.classList.remove('is-active');
+  };
 
-  holdInterval = setInterval(() => {
-    if (holding) {
-      doorStrength = Math.min(100, doorStrength + 6);
-    } else {
-      doorStrength = Math.max(0, doorStrength - 8);
+  handle?.addEventListener('pointerdown', (event) => {
+    event.preventDefault();
+    holding = true;
+    handle.classList.add('is-active');
+  });
+
+  window.addEventListener('pointerup', releaseHold, { once: false });
+  window.addEventListener('pointerleave', releaseHold, { once: false });
+
+  const cleanup = () => {
+    window.removeEventListener('pointerup', releaseHold);
+    window.removeEventListener('pointerleave', releaseHold);
+  };
+
+  const tickTimer = setInterval(() => {
+    doorStrength += holding ? 5 : -7;
+    doorStrength = Math.max(0, Math.min(100, doorStrength));
+    if (fill) {
+      fill.style.width = `${doorStrength}%`;
+      fill.dataset.state = doorStrength > 60 ? 'stable' : doorStrength > 30 ? 'strain' : 'critical';
     }
-    fill.style.width = doorStrength + '%';
+
     if (doorStrength <= 0) {
-      clearInterval(holdInterval);
-      gameState.isBreatherActive = false;
-      box.remove();
-      overlay.style.pointerEvents = 'none';
-      gameOver('Breather se dostal dovnitř');
-    }
-    if (doorStrength >= 100) {
-      // success, repel breather
-      clearInterval(holdInterval);
-      gameState.isBreatherActive = false;
-      box.remove();
-      overlay.style.pointerEvents = 'none';
-      // lower threat level a bit
-      threatLevel = Math.max(0, threatLevel - 30);
-      checkThreats();
+      resolve(false);
+    } else if (doorStrength >= 100 && holding) {
+      resolve(true);
     }
   }, 120);
+
+  function resolve(success) {
+    clearInterval(tickTimer);
+    cleanup();
+    box.remove();
+    overlay.style.pointerEvents = 'none';
+    gameState.isBreatherActive = false;
+    if (success) {
+      clearMovementDetectorAlert();
+      threatLevel = Math.max(0, threatLevel - 30);
+      checkThreats();
+    } else {
+      clearMovementDetectorAlert();
+      gameOver('Breather se dostal dovnitř');
+    }
+  }
 }
 
 function startMiniGame() {
@@ -2917,7 +3787,9 @@ function openApp(key, restoredState = null) {
       (key === 'tor' && gameState.torInstalled) ||
       (key === 'browser' && gameState.torInstalled) ||
       (key === 'links' && gameState.linksInstalled) ||
-      (key === 'dosmarket' && gameState.dosMarketInstalled)
+      (key === 'resmarket' && gameState.resMarketInstalled) ||
+      (key === 'cryptominer' && gameState.cryptoMinerInstalled) ||
+      (key === 'movementdetector' && gameState.movementDetectorInstalled)
     );
     if (canExpose) {
       apps[key] = hiddenApps[key];
@@ -2951,8 +3823,16 @@ function openApp(key, restoredState = null) {
     return;
   }
 
-  if (key === 'dosmarket' && !gameState.dosMarketInstalled) {
-    installDosMarket();
+  if (key === 'resmarket' && !gameState.resMarketInstalled) {
+    installResMarket();
+    return;
+  }
+  if (key === 'cryptominer' && !gameState.cryptoMinerInstalled) {
+    installCryptoMiner();
+    return;
+  }
+  if (key === 'movementdetector' && !gameState.movementDetectorInstalled) {
+    alert('Kup Movement Detector v ResMarketu, abys odemkl aplikaci.');
     return;
   }
   if (key === 'links' && !gameState.linksInstalled) {
@@ -2987,8 +3867,9 @@ function openApp(key, restoredState = null) {
     const offset = (state.windows.size % 4) * 26;
     windowEl.style.top = `${120 + offset}px`;
     windowEl.style.left = `${220 + offset}px`;
-    windowEl.style.width = "480px";
-    windowEl.style.height = "360px";
+    const { width, height } = getAppWindowSize(key);
+    windowEl.style.width = width;
+    windowEl.style.height = height;
   }
 
   const content = windowEl.querySelector(".window__content");
@@ -3609,8 +4490,8 @@ async function startStory(chatContainer, inputEl, sendBtn) {
     { type: 'received', text: "Vidím Tor. Posílám ti links.pdf s trasou. Čti pečlivě.", delay: 1200 },
     { type: 'file', fileName: "links.pdf", action: "showLinksPdf" },
     { type: 'received', text: "Klíče hledej v Techno linkách. Většina ostatních je falešná stopa.", delay: 1800 },
-    { type: 'received', text: "Potřebuješ DOSCoiny. Stáhni DOSMarket, tam nakoupíš přístupy.", delay: 1800 },
-    { type: 'file', fileName: "dosmarket.exe", action: "installDosMarket" }
+    { type: 'received', text: "Potřebuješ Res Coins. Stáhni ResMarket, tam nakoupíš přístupy.", delay: 1800 },
+    { type: 'file', fileName: "resmarket.exe", action: "installResMarket" }
   ];
 
   const countdownStepIndex = script.findIndex(step => typeof step.countdownMinutes === 'number');
@@ -3680,8 +4561,8 @@ async function startStory(chatContainer, inputEl, sendBtn) {
             console.error('Failed to download links.pdf', e);
             alert('Stahování links.pdf se nezdařilo. Zkus to znovu nebo přidej soubor do projektu.');
           }
-        } else if (step.action === 'installDosMarket') {
-            installDosMarket();
+        } else if (step.action === 'installResMarket') {
+          installResMarket();
         }
         gameState.chatStep++;
         processStep();
@@ -3870,9 +4751,18 @@ function initializeDesktop() {
     ensureDesktopIcon('links', '📄', 'links.pdf');
   }
 
-  if (gameState.dosMarketInstalled) {
-    ensureAppDefinition('dosmarket');
-    ensureDesktopIcon('dosmarket', '₿', 'DOSMarket');
+  if (gameState.resMarketInstalled) {
+    ensureAppDefinition('resmarket');
+    ensureDesktopIcon('resmarket', 'Ⓡ', 'ResMarket');
+  }
+
+  if (gameState.cryptoMinerInstalled) {
+    ensureAppDefinition('cryptominer');
+    ensureDesktopIcon('cryptominer', '⛏', 'Crypto Miner');
+  }
+
+  if (gameState.movementDetectorInstalled) {
+    ensureMovementDetectorApp();
   }
 
   renderStartMenu();
@@ -3887,3 +4777,5 @@ function initializeDesktop() {
 
 initializeDesktop();
 resumeCountdownIfNeeded();
+startCryptoMinerLoop();
+updateMovementDetectorDisplays();
