@@ -42,8 +42,6 @@ const loginStatus = document.getElementById("login-status");
 const loginPowerMenu = document.getElementById("loginPowerMenu");
 const loginPowerBtn = document.querySelector('[data-role="login-power"]');
 
-const countdownDisplays = new Set();
-let countdownInterval = null;
 
 const loginSubmitBtn = document.getElementById("login-submit-btn");
 const togglePasswordBtn = document.getElementById("toggle-password");
@@ -695,51 +693,118 @@ const apps = {
     icon: "🎨",
     render: (container) => {
       container.innerHTML = `
-        <section class="paint">
-          <div class="paint-controls">
-            <input type="color" value="#8ef2ff" aria-label="Barva štětce" />
-            <input type="range" min="2" max="20" value="6" aria-label="Velikost štětce" />
-            <button type="button" class="paint-clear">Clear</button>
+        <section class="paint-app" data-paint-root>
+          <div class="paint-ribbon">
+            <div class="paint-field">
+              <span class="paint-label">Barva</span>
+              <input type="color" value="#58c4ff" data-paint-color aria-label="Barva štětce">
+            </div>
+            <div class="paint-field">
+              <span class="paint-label">Štětec</span>
+              <input type="range" min="2" max="36" value="8" data-paint-size aria-label="Velikost štětce">
+              <span class="paint-size" data-paint-size-label>8 px</span>
+            </div>
+            <div class="paint-field">
+              <span class="paint-label">Opacita</span>
+              <input type="range" min="0.1" max="1" step="0.05" value="1" data-paint-opacity aria-label="Průhlednost">
+            </div>
+            <div class="paint-actions">
+              <button type="button" class="paint-btn active" data-paint-mode="brush">Štětec</button>
+              <button type="button" class="paint-btn" data-paint-mode="eraser">Guma</button>
+              <button type="button" class="paint-btn" data-paint-clear>Vymazat</button>
+              <button type="button" class="paint-btn secondary" data-paint-export>Uložit PNG</button>
+            </div>
           </div>
-          <canvas class="paint-canvas" width="420" height="240"></canvas>
+          <div class="paint-surface-wrap">
+            <canvas class="paint-canvas" data-paint-canvas></canvas>
+            <div class="paint-watermark" data-paint-watermark>Klikni a kresli</div>
+          </div>
         </section>
       `;
 
-      const colorPicker = container.querySelector("input[type=color]");
-      const sizeSlider = container.querySelector("input[type=range]");
-      const clearButton = container.querySelector(".paint-clear");
-      const canvas = container.querySelector("canvas");
-      const ctx = canvas.getContext("2d");
+      const canvas = container.querySelector('[data-paint-canvas]');
+      const ctx = canvas.getContext('2d');
+      const colorPicker = container.querySelector('[data-paint-color]');
+      const sizeSlider = container.querySelector('[data-paint-size]');
+      const sizeLabel = container.querySelector('[data-paint-size-label]');
+      const opacitySlider = container.querySelector('[data-paint-opacity]');
+      const clearBtn = container.querySelector('[data-paint-clear]');
+      const exportBtn = container.querySelector('[data-paint-export]');
+      const watermark = container.querySelector('[data-paint-watermark]');
+      const toolButtons = Array.from(container.querySelectorAll('[data-paint-mode]'));
+      const baseColor = '#040b18';
 
-      const resizeCanvas = () => {
-        const ratio = window.devicePixelRatio || 1;
-        const rect = canvas.getBoundingClientRect();
-        canvas.width = rect.width * ratio;
-        canvas.height = rect.height * ratio;
-        ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
-        ctx.lineCap = "round";
-        ctx.lineJoin = "round";
-        ctx.clearRect(0, 0, rect.width, rect.height);
-      };
-
-      const handleResize = debounce(resizeCanvas, 200);
-      resizeCanvas();
-      window.addEventListener("resize", handleResize);
-
+      let pixelRatio = window.devicePixelRatio || 1;
       let drawing = false;
       let lastPoint = null;
+      let hasDrawing = false;
+      let activeTool = 'brush';
 
-      const startDrawing = (event) => {
-        event.preventDefault();
-        drawing = true;
-        lastPoint = getCanvasPos(event, canvas);
+      const updateSizeLabel = () => {
+        if (sizeLabel) sizeLabel.textContent = `${Math.round(Number(sizeSlider.value))} px`;
       };
 
-      const draw = (event) => {
+      const markDirty = () => {
+        if (!hasDrawing) {
+          hasDrawing = true;
+          if (watermark) watermark.hidden = true;
+        }
+      };
+
+      const setActiveTool = (tool) => {
+        activeTool = tool;
+        toolButtons.forEach((btn) => {
+          btn.classList.toggle('active', btn.dataset.paintMode === tool);
+        });
+      };
+
+      toolButtons.forEach((btn) => {
+        btn.addEventListener('click', () => setActiveTool(btn.dataset.paintMode));
+      });
+
+      const getCanvasMetrics = () => {
+        const rect = canvas.getBoundingClientRect();
+        const scaleX = rect.width ? canvas.width / rect.width : 1;
+        const scaleY = rect.height ? canvas.height / rect.height : 1;
+        return { rect, scaleX, scaleY };
+      };
+
+      const getPoint = (event) => {
+        const { rect, scaleX, scaleY } = getCanvasMetrics();
+        return {
+          x: (event.clientX - rect.left) * scaleX,
+          y: (event.clientY - rect.top) * scaleY,
+        };
+      };
+
+      const applyBrushStyle = () => {
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.lineWidth = Number(sizeSlider.value) * pixelRatio;
+        ctx.globalAlpha = parseFloat(opacitySlider.value);
+        if (activeTool === 'eraser') {
+          ctx.globalCompositeOperation = 'destination-out';
+        } else {
+          ctx.globalCompositeOperation = 'source-over';
+          ctx.strokeStyle = colorPicker.value;
+        }
+      };
+
+      const beginDraw = (event) => {
+        event.preventDefault();
+        drawing = true;
+        lastPoint = getPoint(event);
+        applyBrushStyle();
+        markDirty();
+        if (canvas.setPointerCapture) {
+          try { canvas.setPointerCapture(event.pointerId); } catch (err) {}
+        }
+      };
+
+      const drawStroke = (event) => {
         if (!drawing) return;
-        const point = getCanvasPos(event, canvas);
-        ctx.strokeStyle = colorPicker.value;
-        ctx.lineWidth = Number(sizeSlider.value);
+        applyBrushStyle();
+        const point = getPoint(event);
         ctx.beginPath();
         ctx.moveTo(lastPoint.x, lastPoint.y);
         ctx.lineTo(point.x, point.y);
@@ -747,18 +812,90 @@ const apps = {
         lastPoint = point;
       };
 
-      const stopDrawing = () => {
+      const endDraw = (event) => {
         drawing = false;
+        lastPoint = null;
+        if (event?.pointerId && canvas.releasePointerCapture) {
+          try { canvas.releasePointerCapture(event.pointerId); } catch (err) {}
+        }
       };
 
-      canvas.addEventListener("pointerdown", startDrawing);
-      canvas.addEventListener("pointermove", draw);
-      window.addEventListener("pointerup", stopDrawing);
-      canvas.addEventListener("pointerleave", stopDrawing);
+      const fillBackground = () => {
+        ctx.save();
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = baseColor;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.restore();
+      };
 
-      clearButton.addEventListener("click", () => {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
+      const resizeCanvas = (preserveDrawing = true) => {
+        const rect = canvas.getBoundingClientRect();
+        if (!rect.width || !rect.height) return;
+        const snapshot = preserveDrawing && hasDrawing ? canvas.toDataURL('image/png') : null;
+        pixelRatio = window.devicePixelRatio || 1;
+        canvas.width = Math.max(1, Math.floor(rect.width * pixelRatio));
+        canvas.height = Math.max(1, Math.floor(rect.height * pixelRatio));
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        fillBackground();
+
+        if (snapshot) {
+          const img = new Image();
+          img.onload = () => {
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+          };
+          img.src = snapshot;
+        } else {
+          hasDrawing = false;
+          if (watermark) watermark.hidden = false;
+        }
+        applyBrushStyle();
+      };
+
+      const handleResize = debounce(() => resizeCanvas(true), 150);
+
+      resizeCanvas(false);
+      window.addEventListener('resize', handleResize);
+
+      canvas.addEventListener('pointerdown', beginDraw);
+      canvas.addEventListener('pointermove', drawStroke);
+      canvas.addEventListener('pointerleave', endDraw);
+      canvas.addEventListener('pointercancel', endDraw);
+      window.addEventListener('pointerup', endDraw);
+
+      sizeSlider.addEventListener('input', updateSizeLabel);
+      opacitySlider.addEventListener('input', applyBrushStyle);
+      colorPicker.addEventListener('input', applyBrushStyle);
+
+      clearBtn.addEventListener('click', () => {
+        hasDrawing = false;
+        fillBackground();
+        if (watermark) watermark.hidden = false;
       });
+
+      exportBtn.addEventListener('click', () => {
+        const link = document.createElement('a');
+        link.href = canvas.toDataURL('image/png');
+        link.download = `studio-${Date.now()}.png`;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+      });
+
+      const cleanup = () => {
+        window.removeEventListener('resize', handleResize);
+        window.removeEventListener('pointerup', endDraw);
+      };
+      container.addEventListener('DOMNodeRemoved', function handle(event) {
+        if (event.target === container) {
+          cleanup();
+          container.removeEventListener('DOMNodeRemoved', handle);
+        }
+      });
+
+      updateSizeLabel();
+      setActiveTool('brush');
     },
   },
   timer: {
@@ -784,6 +921,299 @@ const apps = {
           emptyState.style.display = active ? 'none' : 'block';
         }
       });
+    }
+  },
+  minesweeper: {
+    title: "Minesweeper",
+    icon: "💣",
+    render: (container) => {
+      container.innerHTML = `
+        <section class="minesweeper" data-ms-root>
+          <header class="ms-header">
+            <div class="ms-panel">
+              <div class="ms-counter" data-ms-mines>010</div>
+              <div class="ms-counter" data-ms-timer>000</div>
+            </div>
+            <div class="ms-controls" data-ms-controls>
+              <div class="ms-difficulty">
+                <button type="button" class="ms-toggle active" data-ms-difficulty="easy">Beginner</button>
+                <button type="button" class="ms-toggle" data-ms-difficulty="medium">Intermediate</button>
+                <button type="button" class="ms-toggle" data-ms-difficulty="hard">Expert</button>
+              </div>
+              <button type="button" class="ms-reset" data-ms-reset>😊</button>
+            </div>
+          </header>
+          <div class="ms-status" data-ms-status>Najdi všechny miny.</div>
+          <div class="ms-board-wrapper">
+            <div class="ms-board" data-ms-board aria-label="Minesweeper board"></div>
+          </div>
+          <p class="ms-hint">Levým klikem odhalíš pole, pravým označíš vlajkou.</p>
+        </section>
+      `;
+
+      const difficulties = {
+        easy: { rows: 9, cols: 9, mines: 10, label: 'Beginner' },
+        medium: { rows: 16, cols: 16, mines: 40, label: 'Intermediate' },
+        hard: { rows: 16, cols: 30, mines: 99, label: 'Expert' },
+      };
+
+      const boardEl = container.querySelector('[data-ms-board]');
+      const timerEl = container.querySelector('[data-ms-timer]');
+      const minesEl = container.querySelector('[data-ms-mines]');
+      const statusEl = container.querySelector('[data-ms-status]');
+      const resetBtn = container.querySelector('[data-ms-reset]');
+      const difficultyBtns = Array.from(container.querySelectorAll('[data-ms-difficulty]'));
+
+      let currentDifficulty = 'easy';
+      let board = [];
+      let cellButtons = new Map();
+      let minesPlaced = false;
+      let flags = 0;
+      let revealed = 0;
+      let gameOver = false;
+      let timer = null;
+      let elapsed = 0;
+
+      const startTimer = () => {
+        if (timer) return;
+        timer = setInterval(() => {
+          elapsed = Math.min(999, elapsed + 1);
+          timerEl.textContent = String(elapsed).padStart(3, '0');
+        }, 1000);
+      };
+
+      const stopTimer = () => {
+        if (timer) {
+          clearInterval(timer);
+          timer = null;
+        }
+      };
+
+      const updateStatus = (text, variant = 'idle') => {
+        statusEl.textContent = text;
+        statusEl.dataset.state = variant;
+      };
+
+      const updateCounters = () => {
+        const config = difficulties[currentDifficulty];
+        minesEl.textContent = String(Math.max(0, config.mines - flags)).padStart(3, '0');
+        timerEl.textContent = String(elapsed).padStart(3, '0');
+      };
+
+      const getNeighbors = (row, col) => {
+        const config = difficulties[currentDifficulty];
+        const coords = [];
+        for (let r = row - 1; r <= row + 1; r++) {
+          for (let c = col - 1; c <= col + 1; c++) {
+            if (r === row && c === col) continue;
+            if (r >= 0 && r < config.rows && c >= 0 && c < config.cols) {
+              coords.push([r, c]);
+            }
+          }
+        }
+        return coords;
+      };
+
+      const updateAdjacencyCounts = () => {
+        const config = difficulties[currentDifficulty];
+        for (let r = 0; r < config.rows; r++) {
+          for (let c = 0; c < config.cols; c++) {
+            const cell = board[r][c];
+            if (cell.mine) {
+              cell.adjacent = -1;
+              continue;
+            }
+            const neighbors = getNeighbors(r, c);
+            cell.adjacent = neighbors.reduce((sum, [nr, nc]) => sum + (board[nr][nc].mine ? 1 : 0), 0);
+          }
+        }
+      };
+
+      const plantMines = (safeRow, safeCol) => {
+        const config = difficulties[currentDifficulty];
+        let placed = 0;
+        const totalCells = config.rows * config.cols;
+        const forbidden = new Set([`${safeRow}-${safeCol}`]);
+        while (placed < config.mines && placed < totalCells - 1) {
+          const idx = Math.floor(Math.random() * totalCells);
+          const row = Math.floor(idx / config.cols);
+          const col = idx % config.cols;
+          const key = `${row}-${col}`;
+          if (forbidden.has(key) || board[row][col].mine) continue;
+          board[row][col].mine = true;
+          placed++;
+        }
+        updateAdjacencyCounts();
+        minesPlaced = true;
+      };
+
+      const revealFlood = (startRow, startCol) => {
+        const queue = [[startRow, startCol]];
+        const config = difficulties[currentDifficulty];
+        while (queue.length) {
+          const [row, col] = queue.shift();
+          const cell = board[row][col];
+          if (cell.state === 'revealed' || cell.state === 'flagged') continue;
+          cell.state = 'revealed';
+          revealed++;
+          const button = cellButtons.get(`${row}-${col}`);
+          button.classList.add('revealed');
+          button.textContent = cell.adjacent > 0 ? cell.adjacent : '';
+          button.dataset.value = cell.adjacent > 0 ? cell.adjacent : '';
+          if (cell.adjacent === 0) {
+            queue.push(...getNeighbors(row, col));
+          }
+        }
+      };
+
+      const revealCell = (row, col) => {
+        if (gameOver) return;
+        const cell = board[row][col];
+        if (cell.state === 'flagged' || cell.state === 'revealed') return;
+        if (!minesPlaced) {
+          plantMines(row, col);
+          startTimer();
+          updateStatus('Hra běží...');
+        }
+        if (cell.mine) {
+          cell.state = 'revealed';
+          const button = cellButtons.get(`${row}-${col}`);
+          button.classList.add('revealed', 'mine', 'exploded');
+          button.textContent = '💣';
+          endGame(false);
+          return;
+        }
+        revealFlood(row, col);
+        checkVictory();
+      };
+
+      const toggleFlag = (row, col) => {
+        if (gameOver) return;
+        const cell = board[row][col];
+        if (cell.state === 'revealed') return;
+        const button = cellButtons.get(`${row}-${col}`);
+        if (cell.state === 'flagged') {
+          cell.state = 'hidden';
+          button.classList.remove('flagged');
+          button.textContent = '';
+          flags = Math.max(0, flags - 1);
+        } else {
+          cell.state = 'flagged';
+          button.classList.add('flagged');
+          button.textContent = '🚩';
+          flags++;
+        }
+        updateCounters();
+      };
+
+      const revealBoard = () => {
+        cellButtons.forEach((button, key) => {
+          const [row, col] = key.split('-').map(Number);
+          const cell = board[row][col];
+          if (cell.mine) {
+            button.classList.add('revealed', 'mine');
+            button.textContent = '💣';
+          } else if (cell.adjacent > 0 && cell.state !== 'revealed') {
+            button.textContent = cell.adjacent;
+            button.dataset.value = cell.adjacent;
+          }
+        });
+      };
+
+      const checkVictory = () => {
+        const config = difficulties[currentDifficulty];
+        if (revealed >= config.rows * config.cols - config.mines) {
+          endGame(true);
+        }
+      };
+
+      const endGame = (won) => {
+        if (gameOver) return;
+        gameOver = true;
+        stopTimer();
+        revealBoard();
+        resetBtn.textContent = won ? '😎' : '💥';
+        updateStatus(won ? 'Vyhrál jsi! Všechny miny jsou pryč.' : 'Bum! Zkus to znovu.', won ? 'success' : 'fail');
+      };
+
+      const buildBoard = () => {
+        const config = difficulties[currentDifficulty];
+        board = [];
+        cellButtons = new Map();
+        boardEl.style.setProperty('--ms-cols', config.cols);
+        boardEl.innerHTML = '';
+        for (let r = 0; r < config.rows; r++) {
+          const rowArr = [];
+          for (let c = 0; c < config.cols; c++) {
+            const cell = { mine: false, adjacent: 0, state: 'hidden' };
+            rowArr.push(cell);
+            const btn = document.createElement('button');
+            btn.className = 'ms-cell';
+            btn.dataset.msCell = `${r}-${c}`;
+            btn.setAttribute('aria-label', `Řádek ${r + 1}, sloupec ${c + 1}`);
+            boardEl.appendChild(btn);
+            cellButtons.set(`${r}-${c}`, btn);
+          }
+          board.push(rowArr);
+        }
+      };
+
+      const resetGame = (diffKey = currentDifficulty) => {
+        stopTimer();
+        currentDifficulty = diffKey;
+        minesPlaced = false;
+        flags = 0;
+        revealed = 0;
+        gameOver = false;
+        elapsed = 0;
+        resetBtn.textContent = '😊';
+        difficultyBtns.forEach((btn) => {
+          btn.classList.toggle('active', btn.dataset.msDifficulty === currentDifficulty);
+        });
+        buildBoard();
+        updateCounters();
+        updateStatus('Najdi všechny miny.');
+      };
+
+      const handleBoardClick = (event) => {
+        const cellBtn = event.target.closest('[data-ms-cell]');
+        if (!cellBtn || !boardEl.contains(cellBtn)) return;
+        const [row, col] = cellBtn.dataset.msCell.split('-').map(Number);
+        revealCell(row, col);
+      };
+
+      const handleBoardFlag = (event) => {
+        const cellBtn = event.target.closest('[data-ms-cell]');
+        if (!cellBtn || !boardEl.contains(cellBtn)) return;
+        event.preventDefault();
+        const [row, col] = cellBtn.dataset.msCell.split('-').map(Number);
+        toggleFlag(row, col);
+      };
+
+      difficultyBtns.forEach((btn) => {
+        btn.addEventListener('click', () => {
+          resetGame(btn.dataset.msDifficulty);
+        });
+      });
+
+      resetBtn.addEventListener('click', () => resetGame(currentDifficulty));
+      boardEl.addEventListener('click', handleBoardClick);
+      boardEl.addEventListener('contextmenu', handleBoardFlag);
+
+      const teardown = () => {
+        stopTimer();
+        boardEl.removeEventListener('click', handleBoardClick);
+        boardEl.removeEventListener('contextmenu', handleBoardFlag);
+      };
+
+      container.addEventListener('DOMNodeRemoved', function onRemove(event) {
+        if (event.target === container) {
+          teardown();
+          container.removeEventListener('DOMNodeRemoved', onRemove);
+        }
+      });
+
+      resetGame('easy');
     }
   },
   
@@ -1788,6 +2218,185 @@ function saveGame() {
 setInterval(saveGame, 1000);
 window.addEventListener("beforeunload", saveGame);
 
+function runMissionTimerCompletionSequence() {
+  console.warn('Mission timer finished. Replace runMissionTimerCompletionSequence() with the desired sequence.');
+}
+
+const missionTimer = (() => {
+  const displays = new Set();
+  const parser = document.createElement('div');
+  const triggerPatterns = [
+    /mas\s+1\s+hodinu/,
+    /mas\s+jednu\s+hodinu/,
+    /you\s+have\s+1\s+hour/,
+  ];
+
+  let intervalId = null;
+
+  const timerState = {
+    active: false,
+    deadline: null,
+  };
+
+  function normalizeMessage(text = '') {
+    parser.innerHTML = text;
+    const plain = (parser.textContent || parser.innerText || '').trim();
+    parser.textContent = '';
+    return plain
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9\s]/gi, ' ')
+      .replace(/\s+/g, ' ')
+      .toLowerCase();
+  }
+
+  function ensureTimerSurface(openWindow = true) {
+    ensureAppDefinition('timer');
+    ensureDesktopIcon('timer', '⏱', 'Timer');
+    if (openWindow && !state.windows.has('timer')) {
+      try { openApp('timer'); } catch (err) {
+        console.warn('Timer window open failed', err);
+      }
+    }
+  }
+
+  function persistCountdown() {
+    gameState.countdownActive = timerState.active;
+    gameState.countdownDeadline = timerState.deadline;
+    gameState.countdownTriggered = timerState.active;
+    persistState();
+  }
+
+  function clearTicker() {
+    if (intervalId) {
+      clearInterval(intervalId);
+      intervalId = null;
+    }
+  }
+
+  function broadcast(remainingMs) {
+    displays.forEach((entry) => {
+      if (!entry.root.isConnected) {
+        displays.delete(entry);
+        return;
+      }
+      entry.update(remainingMs);
+    });
+  }
+
+  function handleExpiry() {
+    broadcast(0);
+    stop({ keepDisplay: true });
+    runMissionTimerCompletionSequence();
+    gameOver('Čas vypršel. Poprava se spustila.', { keepCountdownVisible: true });
+  }
+
+  function tick() {
+    if (!timerState.active || !timerState.deadline) {
+      clearTicker();
+      broadcast(null);
+      return;
+    }
+    const remaining = timerState.deadline - Date.now();
+    if (remaining <= 0) {
+      handleExpiry();
+      return;
+    }
+    broadcast(remaining);
+  }
+
+  function start(minutes = 60) {
+    const duration = Math.max(1, minutes) * 60 * 1000;
+    timerState.active = true;
+    timerState.deadline = Date.now() + duration;
+    ensureTimerSurface(true);
+    tick();
+    clearTicker();
+    intervalId = setInterval(tick, 1000);
+    persistCountdown();
+    return timerState.deadline;
+  }
+
+  function stop({ keepDisplay = false } = {}) {
+    timerState.active = false;
+    timerState.deadline = null;
+    clearTicker();
+    if (!keepDisplay) {
+      broadcast(null);
+    }
+    gameState.countdownActive = false;
+    gameState.countdownDeadline = null;
+    gameState.countdownTriggered = false;
+    persistState();
+  }
+
+  function resume() {
+    if (!gameState.countdownActive || typeof gameState.countdownDeadline !== 'number') {
+      stop();
+      return;
+    }
+    timerState.active = true;
+    timerState.deadline = gameState.countdownDeadline;
+    ensureTimerSurface(true);
+    tick();
+    clearTicker();
+    intervalId = setInterval(tick, 1000);
+  }
+
+  function attachDisplay(rootEl, options = {}) {
+    if (!rootEl) return null;
+    const valueEl = rootEl.querySelector('[data-role="timer-value"]');
+    if (!valueEl) return null;
+    const entry = {
+      root: rootEl,
+      valueEl,
+      defaultText: valueEl.textContent || '60:00',
+      onStateChange: typeof options.onStateChange === 'function' ? options.onStateChange : null,
+      update(remainingMs) {
+        const isActive = typeof remainingMs === 'number' && remainingMs >= 0;
+        if (isActive) {
+          this.valueEl.textContent = formatCountdown(remainingMs);
+          this.root.classList.add('visible');
+          this.root.classList.toggle('danger', remainingMs <= 5 * 60 * 1000);
+          this.root.setAttribute('aria-hidden', 'false');
+        } else {
+          this.valueEl.textContent = this.defaultText;
+          this.root.classList.remove('visible', 'danger');
+          this.root.setAttribute('aria-hidden', 'true');
+        }
+        this.onStateChange?.({ active: isActive, remainingMs: isActive ? remainingMs : null });
+      },
+    };
+    displays.add(entry);
+    if (timerState.active && timerState.deadline) {
+      entry.update(Math.max(0, timerState.deadline - Date.now()));
+    } else {
+      entry.update(null);
+    }
+    return entry;
+  }
+
+  function maybeTriggerFromMessage(rawText = '') {
+    if (!rawText || timerState.active) return false;
+    const normalized = normalizeMessage(rawText);
+    if (triggerPatterns.some((pattern) => pattern.test(normalized))) {
+      start(60);
+      return true;
+    }
+    return false;
+  }
+
+  function init() {
+    if (gameState.countdownActive && typeof gameState.countdownDeadline === 'number') {
+      resume();
+    } else {
+      stop();
+    }
+  }
+
+  return { init, start, stop, resume, attachDisplay, maybeTriggerFromMessage };
+})();
+
 function formatCountdown(ms) {
   const totalSeconds = Math.max(0, Math.floor(ms / 1000));
   const minutes = Math.floor(totalSeconds / 60);
@@ -1796,153 +2405,23 @@ function formatCountdown(ms) {
 }
 
 function attachCountdownDisplay(rootEl, options = {}) {
-  if (!rootEl) return null;
-  const valueEl = rootEl.querySelector('[data-role="timer-value"]');
-  if (!valueEl) return null;
-  const entry = {
-    root: rootEl,
-    valueEl,
-    defaultText: valueEl.textContent || '60:00',
-    onStateChange: typeof options.onStateChange === 'function' ? options.onStateChange : null,
-  };
-  countdownDisplays.add(entry);
-  const active = gameState.countdownActive && gameState.countdownDeadline;
-  if (active) {
-    const remaining = Math.max(0, gameState.countdownDeadline - Date.now());
-    setCountdownDisplayState(entry, remaining);
-  } else {
-    setCountdownDisplayState(entry, null);
-  }
-  return entry;
-}
-
-function setCountdownDisplayState(entry, remainingMs) {
-  if (!entry.root.isConnected) {
-    countdownDisplays.delete(entry);
-    return;
-  }
-  const isActive = typeof remainingMs === 'number';
-  if (isActive) {
-    entry.valueEl.textContent = formatCountdown(remainingMs);
-    entry.root.classList.add('visible');
-    entry.root.setAttribute('aria-hidden', 'false');
-    entry.root.classList.toggle('danger', remainingMs <= 5 * 60 * 1000);
-  } else {
-    entry.root.classList.remove('visible', 'danger');
-    entry.root.setAttribute('aria-hidden', 'true');
-    entry.valueEl.textContent = entry.defaultText;
-  }
-  entry.onStateChange?.({ active: isActive, remainingMs: isActive ? remainingMs : null });
-}
-
-function updateCountdownDisplay(remainingMs) {
-  countdownDisplays.forEach((entry) => setCountdownDisplayState(entry, remainingMs));
+  return missionTimer.attachDisplay(rootEl, options);
 }
 
 function hideCountdownDisplay() {
-  countdownDisplays.forEach((entry) => setCountdownDisplayState(entry, null));
-}
-
-const hourWarningRegex = /mas\s+1\s+hodinu/;
-const messageParserEl = document.createElement('div');
-
-function normalizeHourWarningText(message = '') {
-  messageParserEl.innerHTML = message;
-  const plain = (messageParserEl.textContent || messageParserEl.innerText || '').trim();
-  messageParserEl.textContent = '';
-  return plain
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-z0-9\s]/gi, ' ')
-    .replace(/\s+/g, ' ')
-    .toLowerCase();
-}
-
-function maybeTriggerMissionTimer(rawText = '') {
-  if (!rawText || gameState.countdownActive) return;
-  const normalized = normalizeHourWarningText(rawText);
-  if (hourWarningRegex.test(normalized)) {
-    startCountdown(60);
-  }
-}
-
-function runMissionTimerCompletionSequence() {
-  console.warn('Mission timer finished. Replace runMissionTimerCompletionSequence() with the desired sequence.');
-}
-
-function stopCountdown({ keepDisplay = false } = {}) {
-  if (countdownInterval) {
-    clearInterval(countdownInterval);
-    countdownInterval = null;
-  }
-  gameState.countdownActive = false;
-  gameState.countdownDeadline = null;
-  if (!keepDisplay) hideCountdownDisplay();
-  persistState();
-}
-
-function triggerCountdownFailure() {
-  countdownDisplays.forEach((entry) => {
-    if (!entry.root.isConnected) {
-      countdownDisplays.delete(entry);
-      return;
-    }
-    entry.valueEl.textContent = '00:00';
-    entry.root.classList.add('visible', 'danger');
-    entry.root.setAttribute('aria-hidden', 'false');
-    entry.onStateChange?.({ active: true, remainingMs: 0 });
-  });
-  stopCountdown({ keepDisplay: true });
-  runMissionTimerCompletionSequence();
-  gameOver('Čas vypršel. Poprava se spustila.', { keepCountdownVisible: true });
-}
-
-function tickCountdown() {
-  if (!gameState.countdownActive || !gameState.countdownDeadline) {
-    hideCountdownDisplay();
-    stopCountdown();
-    return;
-  }
-  const remaining = gameState.countdownDeadline - Date.now();
-  if (remaining <= 0) {
-    triggerCountdownFailure();
-    return;
-  }
-  updateCountdownDisplay(remaining);
+  missionTimer.stop({ keepDisplay: false });
 }
 
 function startCountdown(minutes = 60) {
-  ensureAppDefinition('timer');
-  ensureDesktopIcon('timer', '⏱', 'Timer');
-  try { openApp('timer'); } catch (e) { console.warn('Timer window open failed', e); }
-  const duration = minutes * 60 * 1000;
-  gameState.countdownActive = true;
-  gameState.countdownDeadline = Date.now() + duration;
-  gameState.countdownTriggered = true;
-  tickCountdown();
-  if (countdownInterval) clearInterval(countdownInterval);
-  countdownInterval = setInterval(tickCountdown, 1000);
-  persistState();
+  missionTimer.start(minutes);
+}
+
+function stopCountdown(options = {}) {
+  missionTimer.stop(options);
 }
 
 function resumeCountdownIfNeeded() {
-  if (!gameState.countdownActive || !gameState.countdownDeadline) {
-    hideCountdownDisplay();
-    return;
-  }
-  const remaining = gameState.countdownDeadline - Date.now();
-  if (remaining <= 0) {
-    triggerCountdownFailure();
-    return;
-  }
-  ensureAppDefinition('timer');
-  ensureDesktopIcon('timer', '⏱', 'Timer');
-  if (!state.windows.has('timer')) {
-    try { openApp('timer'); } catch (e) { console.warn('Timer reopen failed', e); }
-  }
-  updateCountdownDisplay(remaining);
-  if (countdownInterval) clearInterval(countdownInterval);
-  countdownInterval = setInterval(tickCountdown, 1000);
+  missionTimer.init();
 }
 
 const deepSearchPages = {
@@ -3284,7 +3763,7 @@ function addMessage(container, text, type, save = true) {
     gameState.chatHistory.push({ text, type });
   }
   if (save !== false && type === 'received') {
-    maybeTriggerMissionTimer(text);
+    missionTimer.maybeTriggerFromMessage(text);
   }
 }
 
@@ -3376,6 +3855,8 @@ setInterval(updateClock, 15_000);
 function initializeDesktop() {
   ensureAppDefinition('timer');
   ensureDesktopIcon('timer', '⏱', 'Timer');
+  ensureAppDefinition('minesweeper');
+  ensureDesktopIcon('minesweeper', '💣', 'Minesweeper');
 
   // Restore installed apps
   if (gameState.torInstalled) {
