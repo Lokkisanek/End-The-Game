@@ -42,6 +42,9 @@ const loginStatus = document.getElementById("login-status");
 const loginPowerMenu = document.getElementById("loginPowerMenu");
 const loginPowerBtn = document.querySelector('[data-role="login-power"]');
 
+const countdownDisplays = new Set();
+let countdownInterval = null;
+
 const loginSubmitBtn = document.getElementById("login-submit-btn");
 const togglePasswordBtn = document.getElementById("toggle-password");
 
@@ -68,7 +71,6 @@ const audioManager = (() => {
     keyboard: makeSound('fx/keyboard-type.wav', { loop: false, volume: 0.7 }),
     mouseClick: makeSound('fx/mouse-click.flac', { loop: false, volume: 0.7 }),
     notification: makeSound('fx/notification.wav', { loop: false, volume: 0.9 }),
-    pcStart: makeSound('fx/pc-start.wav', { loop: true, volume: 0.7 }),
     systemLogin: makeSound('fx/system-login.wav', { loop: false, volume: 0.8 }),
   };
 
@@ -759,6 +761,31 @@ const apps = {
       });
     },
   },
+  timer: {
+    title: "Mission Timer",
+    icon: "⏱",
+    render: (container) => {
+      container.innerHTML = `
+        <section class="timer-app">
+          <div class="timer-widget" data-countdown-widget aria-hidden="true">
+            <div class="timer-label">Mission Timer</div>
+            <div class="timer-value" data-role="timer-value">60:00</div>
+            <div class="timer-hint">Time Remaining</div>
+          </div>
+          <p class="timer-footnote">Okno můžeš zavřít, čas běží dál.</p>
+          <div class="timer-empty" data-role="timer-empty">Časovač zatím neběží.</div>
+        </section>
+      `;
+      const widget = container.querySelector('[data-countdown-widget]');
+      const emptyState = container.querySelector('[data-role="timer-empty"]');
+      attachCountdownDisplay(widget, {
+        onStateChange: ({ active }) => {
+          if (!emptyState) return;
+          emptyState.style.display = active ? 'none' : 'block';
+        }
+      });
+    }
+  },
   
 };
 
@@ -841,6 +868,7 @@ const hiddenApps = {
           loadingTimer: null,
           isLoading: false,
         };
+        let initialRenderRetries = 0;
 
         const pushHistory = (pageId) => {
           if (browserState.index < browserState.history.length - 1) {
@@ -1245,6 +1273,36 @@ const hiddenApps = {
       const initialTarget = window.__pendingBrowserTarget || startPage || 'about:tor';
       try { goTo(initialTarget); } catch (e) { goTo('about:tor'); }
       window.__pendingBrowserTarget = null;
+
+      const ensureTorHomeVisible = () => {
+        if (!view) return;
+        if (!gameState?.torRunning) return;
+        const hasContent = view.childElementCount > 0 || view.textContent.trim().length > 0;
+        if (hasContent) {
+          initialRenderRetries = 0;
+          return;
+        }
+        if (initialRenderRetries >= 1) {
+          view.innerHTML = renderTorHome();
+          gameState.currentPage = 'about:tor';
+          initialRenderRetries = 0;
+          return;
+        }
+        initialRenderRetries += 1;
+        try {
+          goTo('about:tor', false);
+        } catch (err) {
+          console.error('Tor home retry failed:', err);
+          view.innerHTML = renderTorHome();
+          gameState.currentPage = 'about:tor';
+          initialRenderRetries = 0;
+        }
+      };
+
+      if (initialTarget === 'about:tor') {
+        setTimeout(ensureTorHomeVisible, 150);
+        setTimeout(ensureTorHomeVisible, 450);
+      }
     },
   },
   tor: {
@@ -1377,10 +1435,18 @@ let torInstalling = false;
 
 function showLinksPdf() {
   if (!gameState.linksInstalled) installLinksApp();
+
   try {
-    openApp('links');
+    const anchor = document.createElement('a');
+    anchor.href = 'links.pdf';
+    anchor.download = 'links.pdf';
+    anchor.style.display = 'none';
+    document.body.appendChild(anchor);
+    anchor.click();
+    requestAnimationFrame(() => anchor.remove());
   } catch (e) {
-    console.error('Failed to open links app', e);
+    console.error('Failed to trigger links download', e);
+    alert('Nepodařilo se spustit stahování links.pdf. Zkontroluj, že soubor existuje.');
   }
 }
 
@@ -1487,9 +1553,6 @@ function installLinksApp() {
   }
   renderStartMenu();
   ensureDesktopIcon('links', '📄', 'links.pdf');
-
-  // Auto-open after install for chat flow
-  try { openApp('links'); } catch (e) { console.error(e); }
 }
 
 function installTor() {
@@ -1669,7 +1732,20 @@ const defaultGameState = {
   chatStep: 0,
   chatHistory: [],
   openApps: [], // Array of { key, minimized, x, y, zIndex }
+  countdownActive: false,
+  countdownDeadline: null,
+  countdownTriggered: false,
 };
+
+function freshGameState(overrides = {}) {
+  let base;
+  if (typeof structuredClone === 'function') {
+    base = structuredClone(defaultGameState);
+  } else {
+    base = JSON.parse(JSON.stringify(defaultGameState));
+  }
+  return Object.assign(base, overrides);
+}
 
 function loadSavedData() {
   try {
@@ -1680,10 +1756,22 @@ function loadSavedData() {
 }
 
 const savedData = loadSavedData();
-let gameState = savedData ? { ...defaultGameState, ...savedData.gameState } : { ...defaultGameState };
+let gameState = savedData ? freshGameState(savedData.gameState) : freshGameState();
 
 if (typeof gameState.vpnTier !== 'number') {
   gameState.vpnTier = -1;
+}
+if (typeof gameState.countdownTriggered !== 'boolean') {
+  gameState.countdownTriggered = false;
+}
+if (typeof gameState.countdownDeadline === 'string') {
+  const parsed = Number(gameState.countdownDeadline);
+  gameState.countdownDeadline = Number.isFinite(parsed) ? parsed : null;
+}
+if (gameState.countdownActive && !gameState.countdownDeadline) {
+  gameState.countdownActive = false;
+  gameState.countdownDeadline = null;
+  gameState.countdownTriggered = false;
 }
 
 let shouldSave = true;
@@ -1699,6 +1787,163 @@ function saveGame() {
 
 setInterval(saveGame, 1000);
 window.addEventListener("beforeunload", saveGame);
+
+function formatCountdown(ms) {
+  const totalSeconds = Math.max(0, Math.floor(ms / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+}
+
+function attachCountdownDisplay(rootEl, options = {}) {
+  if (!rootEl) return null;
+  const valueEl = rootEl.querySelector('[data-role="timer-value"]');
+  if (!valueEl) return null;
+  const entry = {
+    root: rootEl,
+    valueEl,
+    defaultText: valueEl.textContent || '60:00',
+    onStateChange: typeof options.onStateChange === 'function' ? options.onStateChange : null,
+  };
+  countdownDisplays.add(entry);
+  const active = gameState.countdownActive && gameState.countdownDeadline;
+  if (active) {
+    const remaining = Math.max(0, gameState.countdownDeadline - Date.now());
+    setCountdownDisplayState(entry, remaining);
+  } else {
+    setCountdownDisplayState(entry, null);
+  }
+  return entry;
+}
+
+function setCountdownDisplayState(entry, remainingMs) {
+  if (!entry.root.isConnected) {
+    countdownDisplays.delete(entry);
+    return;
+  }
+  const isActive = typeof remainingMs === 'number';
+  if (isActive) {
+    entry.valueEl.textContent = formatCountdown(remainingMs);
+    entry.root.classList.add('visible');
+    entry.root.setAttribute('aria-hidden', 'false');
+    entry.root.classList.toggle('danger', remainingMs <= 5 * 60 * 1000);
+  } else {
+    entry.root.classList.remove('visible', 'danger');
+    entry.root.setAttribute('aria-hidden', 'true');
+    entry.valueEl.textContent = entry.defaultText;
+  }
+  entry.onStateChange?.({ active: isActive, remainingMs: isActive ? remainingMs : null });
+}
+
+function updateCountdownDisplay(remainingMs) {
+  countdownDisplays.forEach((entry) => setCountdownDisplayState(entry, remainingMs));
+}
+
+function hideCountdownDisplay() {
+  countdownDisplays.forEach((entry) => setCountdownDisplayState(entry, null));
+}
+
+const hourWarningRegex = /mas\s+1\s+hodinu/;
+const messageParserEl = document.createElement('div');
+
+function normalizeHourWarningText(message = '') {
+  messageParserEl.innerHTML = message;
+  const plain = (messageParserEl.textContent || messageParserEl.innerText || '').trim();
+  messageParserEl.textContent = '';
+  return plain
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9\s]/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .toLowerCase();
+}
+
+function maybeTriggerMissionTimer(rawText = '') {
+  if (!rawText || gameState.countdownActive) return;
+  const normalized = normalizeHourWarningText(rawText);
+  if (hourWarningRegex.test(normalized)) {
+    startCountdown(60);
+  }
+}
+
+function runMissionTimerCompletionSequence() {
+  console.warn('Mission timer finished. Replace runMissionTimerCompletionSequence() with the desired sequence.');
+}
+
+function stopCountdown({ keepDisplay = false } = {}) {
+  if (countdownInterval) {
+    clearInterval(countdownInterval);
+    countdownInterval = null;
+  }
+  gameState.countdownActive = false;
+  gameState.countdownDeadline = null;
+  if (!keepDisplay) hideCountdownDisplay();
+  persistState();
+}
+
+function triggerCountdownFailure() {
+  countdownDisplays.forEach((entry) => {
+    if (!entry.root.isConnected) {
+      countdownDisplays.delete(entry);
+      return;
+    }
+    entry.valueEl.textContent = '00:00';
+    entry.root.classList.add('visible', 'danger');
+    entry.root.setAttribute('aria-hidden', 'false');
+    entry.onStateChange?.({ active: true, remainingMs: 0 });
+  });
+  stopCountdown({ keepDisplay: true });
+  runMissionTimerCompletionSequence();
+  gameOver('Čas vypršel. Poprava se spustila.', { keepCountdownVisible: true });
+}
+
+function tickCountdown() {
+  if (!gameState.countdownActive || !gameState.countdownDeadline) {
+    hideCountdownDisplay();
+    stopCountdown();
+    return;
+  }
+  const remaining = gameState.countdownDeadline - Date.now();
+  if (remaining <= 0) {
+    triggerCountdownFailure();
+    return;
+  }
+  updateCountdownDisplay(remaining);
+}
+
+function startCountdown(minutes = 60) {
+  ensureAppDefinition('timer');
+  ensureDesktopIcon('timer', '⏱', 'Timer');
+  try { openApp('timer'); } catch (e) { console.warn('Timer window open failed', e); }
+  const duration = minutes * 60 * 1000;
+  gameState.countdownActive = true;
+  gameState.countdownDeadline = Date.now() + duration;
+  gameState.countdownTriggered = true;
+  tickCountdown();
+  if (countdownInterval) clearInterval(countdownInterval);
+  countdownInterval = setInterval(tickCountdown, 1000);
+  persistState();
+}
+
+function resumeCountdownIfNeeded() {
+  if (!gameState.countdownActive || !gameState.countdownDeadline) {
+    hideCountdownDisplay();
+    return;
+  }
+  const remaining = gameState.countdownDeadline - Date.now();
+  if (remaining <= 0) {
+    triggerCountdownFailure();
+    return;
+  }
+  ensureAppDefinition('timer');
+  ensureDesktopIcon('timer', '⏱', 'Timer');
+  if (!state.windows.has('timer')) {
+    try { openApp('timer'); } catch (e) { console.warn('Timer reopen failed', e); }
+  }
+  updateCountdownDisplay(remaining);
+  if (countdownInterval) clearInterval(countdownInterval);
+  countdownInterval = setInterval(tickCountdown, 1000);
+}
 
 const deepSearchPages = {
   "about:tor": {
@@ -2146,7 +2391,14 @@ function startMiniGame() {
   });
 }
 
-function gameOver(reason) {
+function gameOver(reason, options = {}) {
+  const { keepCountdownVisible = false } = options;
+  if (!keepCountdownVisible) {
+    stopCountdown();
+  } else {
+    // Ensure internal state stops even if UI stays visible
+    stopCountdown({ keepDisplay: true });
+  }
   // show game over screen
   const go = document.createElement('div');
   go.className = 'game-over-screen';
@@ -2160,26 +2412,25 @@ function gameOver(reason) {
     go.remove();
     // reset game state
     threatLevel = 0;
-    gameState = {
-      isKidnapperActive: false,
-      isBreatherActive: false,
-      keysFound: 0,
-      dosCoin: 100,
-      currentIP: "192.168.1.1",
-      currentPage: "about:tor",
-      torInstalled: false,
-      torRunning: false,
-      numericKeyFound: false,
-      alerts: 0,
-    };
+    gameState = freshGameState();
+    hideCountdownDisplay();
     checkThreats();
     updateStatusBar();
     startThreatSystem();
+    resumeCountdownIfNeeded();
+    persistState();
   });
 }
 
 // start threat system on load
 startThreatSystem();
+
+function primeTorHome() {
+  gameState.currentPage = 'about:tor';
+  if (typeof window !== 'undefined') {
+    window.__pendingBrowserTarget = 'about:tor';
+  }
+}
 
 function openApp(key, restoredState = null) {
   if (!apps[key] && hiddenApps[key]) {
@@ -2208,9 +2459,10 @@ function openApp(key, restoredState = null) {
   // If network is connected but tor flag isn't set, enable it so Tor can render while online
   if (key === 'tor' && gameState.currentNetwork && !gameState.torRunning) {
     gameState.torRunning = true;
+    primeTorHome();
   }
   if (key === 'tor' && !gameState.currentPage) {
-    gameState.currentPage = 'about:tor';
+    primeTorHome();
   }
 
   // Browser now opens as a standalone surface, not inside a window frame.
@@ -2611,6 +2863,7 @@ window.connectWifi = (ssid) => {
 
   gameState.currentNetwork = { ssid: net.ssid };
   gameState.torRunning = true; // assume Tor can run once online
+  primeTorHome();
   selectedNetworkSsid = net.ssid;
   updateStatusBar();
   try { refreshApp('tor'); } catch (e) {}
@@ -2865,7 +3118,7 @@ async function startStory(chatContainer, inputEl, sendBtn) {
     { type: 'received', text: "Byl jsi vybrán. Tvůj systém je nyní připojen k síti Red Room.", delay: 1500 },
     { type: 'player', text: "Red Room? To zní jako nějaká legenda." },
     { type: 'received', text: "Kéž by. Je to místo, kde se dějí věci, které by nikdo neměl vidět.", delay: 2000 },
-    { type: 'received', text: "Dnes večer plánují živé vysílání popravy. Máš 2 hodiny.", delay: 3000 },
+    { type: 'received', text: "Dnes večer plánují živé vysílání popravy. Máš 1 hodinu.", delay: 3000, countdownMinutes: 60 },
     { type: 'player', text: "Co s tím mám dělat já?" },
     { type: 'received', text: "Musíš získat administrátorský přístup. Hledej kódy 'RR-XXXX'.", delay: 2000 },
     { type: 'received', text: "Pro přístup budeš potřebovat tohle. Stáhni to a nainstaluj.", delay: 2000 },
@@ -2874,12 +3127,18 @@ async function startStory(chatContainer, inputEl, sendBtn) {
     { type: 'player', text: "Dobře, zapíšu si to." },
     { type: 'received', text: "Otevři Poznámkový blok. Ozvu se.", delay: 2000 },
     { type: 'waitTor' },
-    { type: 'received', text: "Vidím Tor. Posílám ti PDF s trasou. Čti pečlivě.", delay: 1200 },
+    { type: 'received', text: "Vidím Tor. Posílám ti links.pdf s trasou. Čti pečlivě.", delay: 1200 },
     { type: 'file', fileName: "links.pdf", action: "showLinksPdf" },
     { type: 'received', text: "Klíče hledej v Techno linkách. Většina ostatních je falešná stopa.", delay: 1800 },
     { type: 'received', text: "Potřebuješ DOSCoiny. Stáhni DOSMarket, tam nakoupíš přístupy.", delay: 1800 },
     { type: 'file', fileName: "dosmarket.exe", action: "installDosMarket" }
   ];
+
+  const countdownStepIndex = script.findIndex(step => typeof step.countdownMinutes === 'number');
+  const countdownReady = gameState.countdownActive && typeof gameState.countdownDeadline === 'number';
+  if (!countdownReady && !gameState.countdownTriggered && countdownStepIndex >= 0 && gameState.chatStep > countdownStepIndex) {
+    startCountdown(script[countdownStepIndex].countdownMinutes);
+  }
 
   const processStep = async () => {
     if (gameState.chatStep >= script.length) {
@@ -2895,6 +3154,9 @@ async function startStory(chatContainer, inputEl, sendBtn) {
       inputEl.placeholder = "Čekání na odpověď...";
       await new Promise(r => setTimeout(r, step.delay));
       addMessage(chatContainer, step.text, 'received');
+      if (step.countdownMinutes && (!gameState.countdownActive || typeof gameState.countdownDeadline !== 'number')) {
+        startCountdown(step.countdownMinutes);
+      }
       gameState.chatStep++;
       processStep();
     } else if (step.type === 'waitTor') {
@@ -2931,11 +3193,14 @@ async function startStory(chatContainer, inputEl, sendBtn) {
       const btn = msgDiv.querySelector('.file-download-btn');
       btn.addEventListener('click', () => {
         btn.disabled = true;
-        btn.textContent = step.action === 'showLinksPdf' ? "Otevírám..." : "Instaluji...";
+        btn.textContent = step.action === 'showLinksPdf' ? "Stahuji..." : "Instaluji...";
         if (step.action === 'installTor') {
             installTor();
         } else if (step.action === 'showLinksPdf') {
-          try { showLinksPdf(); } catch (e) { console.error(e); installLinksApp(); openApp('links'); }
+          try { showLinksPdf(); } catch (e) {
+            console.error('Failed to download links.pdf', e);
+            alert('Stahování links.pdf se nezdařilo. Zkus to znovu nebo přidej soubor do projektu.');
+          }
         } else if (step.action === 'installDosMarket') {
             installDosMarket();
         }
@@ -3017,6 +3282,9 @@ function addMessage(container, text, type, save = true) {
   
   if (save) {
     gameState.chatHistory.push({ text, type });
+  }
+  if (save !== false && type === 'received') {
+    maybeTriggerMissionTimer(text);
   }
 }
 
@@ -3106,6 +3374,9 @@ setInterval(updateClock, 15_000);
 // updateStatusBar(); // Removed as status bar is gone
 
 function initializeDesktop() {
+  ensureAppDefinition('timer');
+  ensureDesktopIcon('timer', '⏱', 'Timer');
+
   // Restore installed apps
   if (gameState.torInstalled) {
     apps.tor = hiddenApps.tor;
@@ -3134,3 +3405,4 @@ function initializeDesktop() {
 }
 
 initializeDesktop();
+resumeCountdownIfNeeded();
