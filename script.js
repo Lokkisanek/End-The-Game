@@ -255,6 +255,7 @@ const audioManager = (() => {
     mouseClick: makeSound('fx/mouse-click.flac', { loop: false, volume: 0.7 }),
     notification: makeSound('fx/notification.wav', { loop: false, volume: 0.9 }),
     systemLogin: makeSound('fx/system-login.wav', { loop: false, volume: 0.8 }),
+    pcStart: makeSound('fx/pc-start.wav', { loop: false, volume: 0.8 }),
   };
 
   let masterVolume = 1;
@@ -315,6 +316,18 @@ if (togglePasswordBtn && loginPassword) {
   });
 }
 
+function setDesktopPaused(paused) {
+  const isPaused = !!paused;
+  if (document.body) {
+    document.body.classList.toggle('desktop-paused', isPaused);
+  }
+  if (desktopScreen) {
+    desktopScreen.classList.toggle('desktop-screen--paused', isPaused);
+  }
+}
+
+setDesktopPaused(true);
+
 let powerScreenDismissed = false;
 let powerDragStartY = null;
 let powerDragOffset = 0;
@@ -338,6 +351,7 @@ function exitPowerScreen(options = {}) {
     loginScreen.style.display = 'flex';
     loginScreen.style.opacity = '1';
   }
+  setDesktopPaused(true);
   audioManager.play('pcStart', { restart: true, loop: true });
 
   setTimeout(() => {
@@ -416,6 +430,7 @@ function closeLoginPowerMenu() {
 
 function returnToPowerScreen(mode = 'sleep') {
   if (!powerScreen) return;
+  setDesktopPaused(true);
   closeLoginPowerMenu();
   loginStatus && (loginStatus.textContent = '');
   resetPowerDrag();
@@ -601,6 +616,7 @@ function enterDesktop() {
   setTimeout(() => {
     loginScreen.style.display = "none";
     desktopScreen.style.display = "block";
+    setDesktopPaused(false);
     audioManager.play("ambiance", { restart: true, loop: true });
     // Initialize any desktop stuff if needed
     if (gameState.chatStep === 0 && gameState.chatHistory.length === 0) {
@@ -822,10 +838,38 @@ const customLinkPages = [
     address: 'relay-zeta06n.onion/terminal',
     title: 'Relay Zeta',
     html: `
-      <div class="custom-page">
-        <h2>Relay Zeta</h2>
-        <p>Feel free to swap this snippet for your own.</p>
-      </div>
+      <div style="background-color: #ffffff; color: #333; font-family: Arial, sans-serif; padding: 0;">
+    <div style="background-color: #800000; color: white; padding: 15px; text-align: center;">
+        <h1 style="margin: 0; font-size: 1.5em;">ORGANIC SOLUTIONS &reg;</h1>
+        <p style="font-size: 0.8em; margin: 0;">Rychle. Čerstvě. Kompatibilně.</p>
+    </div>
+
+    <div style="padding: 20px; max-width: 900px; margin: 0 auto;">
+        <h2>Katalog: Ledviny & Játra (Sklad EU)</h2>
+        
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+            <div style="border: 1px solid #ddd; padding: 15px; box-shadow: 2px 2px 5px rgba(0,0,0,0.1);">
+                <h3 style="color: #800000;">Ledvina (Levá) - Typ O+</h3>
+                <p><strong>Dárce:</strong> Muž, 24 let, nekuřák, atlet.</p>
+                <p><strong>Stav:</strong> Sklizeno před 4 hodinami. V chladícím boxu.</p>
+                <p style="font-size: 1.2em; font-weight: bold;">Cena: 15.0 BTC</p>
+                <button style="background: #333; color: white; border: none; padding: 5px 10px;">Přidat do košíku</button>
+            </div>
+
+            <div style="border: 1px solid #ddd; padding: 15px; box-shadow: 2px 2px 5px rgba(0,0,0,0.1);">
+                <h3 style="color: #800000;">Rohovky (Pár) - Modré</h3>
+                <p><strong>Dárce:</strong> Dítě, 8 let. (Premium Quality)</p>
+                <p><strong>Stav:</strong> Na vyžádání (Odběr do 24h).</p>
+                <p style="font-size: 1.2em; font-weight: bold;">Cena: 45.0 BTC</p>
+                <button style="background: #333; color: white; border: none; padding: 5px 10px;">Přidat do košíku</button>
+            </div>
+        </div>
+
+        <div style="background-color: #ffcccc; border: 1px solid red; padding: 10px; margin-top: 20px; font-size: 0.8em;">
+            <strong>VAROVÁNÍ:</strong> Nepřijímáme vrácené zboží po uplynutí 12 hodin od doručení. Rozmrazené zboží je nevratné.
+        </div>
+    </div>
+</div
     `,
   },
   {
@@ -833,10 +877,32 @@ const customLinkPages = [
     address: 'relay-eta84g.onion/stack',
     title: 'Relay Eta',
     html: `
-      <div class="custom-page">
-        <h2>Relay Eta</h2>
-        <p>HTML blocks can include forms, lists, etc.</p>
-      </div>
+     <div style="background-color: #000000; color: #ffffff; font-family: 'Times New Roman', serif; padding: 40px; line-height: 1.8; max-width: 700px; margin: 0 auto;">
+    <h1 style="border-bottom: 1px solid white; padding-bottom: 10px;">Pokud toto čtete, selhal jsem.</h1>
+    
+    <p>
+        Jmenuji se Alex. Nevěřil jsem příběhům o "Čističích", dokud jsem nenašel ten soubor na serveru <em>Black_Rock</em>. Měl jsem to smazat. Místo toho jsem se díval.
+    </p>
+    <p>
+        Sledují mě přes elektrickou síť. Slyším bzučení v zásuvkách, které se mění v morseovku. Říkají mi, kolik času mi zbývá.
+    </p>
+    <p>
+        Ukryl jsem zálohu dat. Není to na cloudu. Je to na starém FTP serveru.
+    </p>
+    
+    <div style="border: 1px dashed white; padding: 15px; margin: 20px 0;">
+        <strong>IP:</strong> 192.168.X.X (Lokální smyčka)<br>
+        <strong>USER:</strong> GHOST_IN_SHELL<br>
+        <strong>PASS:</strong> [Poslední slova mé matky]
+    </div>
+    
+    <p>
+        Nehledají mě. Hledají to, co mám v hlavě. Sbohem.
+    </p>
+    <p style="text-align: right; font-style: italic;">
+        - A.
+    </p>
+</div>
     `,
   },
   {
@@ -844,10 +910,27 @@ const customLinkPages = [
     address: 'relay-theta71s.onion/grid',
     title: 'Relay Theta',
     html: `
-      <div class="custom-page">
-        <h2>Relay Theta</h2>
-        <p>This is placeholder content; replace as needed.</p>
-      </div>
+      <div style="background-color: #f4f4f4; color: #000; font-family: 'Courier New', Courier, monospace; text-align: center; padding: 50px;">
+    <img src="fx/cicada.jpg" alt="[ZDE VLOŽ OBRÁZEK MOTÝLA NEBO OKA]" style="width: 100px; height: 100px; background: #000;">
+    
+    <h2>HLEDÁME INTELIGENCI</h2>
+    
+    <p style="margin-top: 30px;">
+        Cesta nezačíná zde. Cesta zde končí.
+    </p>
+
+    <div style="background-color: #ddd; padding: 20px; margin: 30px auto; width: 50%; letter-spacing: 3px; font-weight: bold;">
+        77 68 61 74 &nbsp; 69 73 &nbsp; 79 6F 75 72 &nbsp; 73 69 6E ?
+    </div>
+
+    <p style="font-size: 0.8em; color: #666;">
+        Klíč je v knize, kterou nikdo nečte. Strana 33. Řádek 4.
+    </p>
+    
+    <div style="color: #f4f4f4; margin-top: 50px;">
+        Heslo je: MORPHEUS
+    </div>
+</div>
     `,
   },
   {
@@ -855,10 +938,83 @@ const customLinkPages = [
     address: 'relay-iota20x.onion/trace',
     title: 'Relay Iota',
     html: `
-      <div class="custom-page">
-        <h2>Relay Iota</h2>
-        <p>Use semantic tags like <strong>, <em>, or <code>code</code>.</p>
-      </div>
+      <style>
+        .relay-iota-radio {
+          background-color: #001a00;
+          color: #00ff00;
+          font-family: "Courier New", monospace;
+          min-height: 80vh;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          text-align: center;
+          padding: 40px 20px;
+          gap: 20px;
+        }
+        .relay-iota-radio__display {
+          font-size: 4rem;
+          border: 2px solid #004400;
+          background: #000;
+          padding: 20px;
+          width: min(480px, 90%);
+          text-shadow: 0 0 10px #00ff00;
+          margin: 0 auto;
+        }
+        .relay-iota-radio__signal {
+          height: 20px;
+          background-color: #003300;
+          width: min(540px, 90%);
+          margin: 0 auto;
+          position: relative;
+          overflow: hidden;
+        }
+        .relay-iota-radio__fill {
+          height: 100%;
+          background-color: #00ff00;
+          width: 5%;
+          transition: width 0.1s ease;
+          box-shadow: 0 0 15px #00ff00;
+        }
+        .relay-iota-radio__slider {
+          width: min(540px, 90%);
+          margin: 20px auto 0;
+        }
+        .relay-iota-radio__noise {
+          color: #004400;
+          min-height: 24px;
+        }
+        .relay-iota-radio__horror {
+          display: none;
+          color: red;
+          font-weight: bold;
+          font-size: 1.5rem;
+          animation: relay-iota-flash 0.2s linear infinite;
+        }
+        .relay-iota-radio__horror.is-visible {
+          display: block;
+        }
+        @keyframes relay-iota-flash {
+          0% { opacity: 1; }
+          50% { opacity: 0; }
+          100% { opacity: 1; }
+        }
+      </style>
+      <section class="relay-iota-radio" data-relay-iota>
+        <h1>SHORTWAVE RECEIVER v4.0</h1>
+        <p>Ladění frekvence (MHz)</p>
+        <div class="relay-iota-radio__display" data-iota-display>88.0 MHz</div>
+        <div class="relay-iota-radio__signal">
+          <div class="relay-iota-radio__fill" data-iota-signal></div>
+        </div>
+        <input type="range" min="880" max="1080" value="880" class="relay-iota-radio__slider" data-iota-tuner aria-label="Ladění frekvence">
+        <div class="relay-iota-radio__noise" data-iota-noise>[ŠUM...]</div>
+        <div class="relay-iota-radio__horror" data-iota-horror>
+          NĚKDO KLEPE NA TVOJE OKNO.<br>
+          NĚKDO KLEPE NA TVOJE OKNO.<br>
+          NĚKDO KLEPE NA TVOJE OKNO.
+        </div>
+      </section>
     `,
   },
   {
@@ -866,10 +1022,52 @@ const customLinkPages = [
     address: 'relay-kappa67b.onion/cache',
     title: 'Relay Kappa',
     html: `
-      <div class="custom-page">
-        <h2>Relay Kappa</h2>
-        <p>Keep styling inline or rely on global CSS.</p>
-      </div>
+      <div style="background-color: #fff; color: #000; font-family: 'Courier New', Courier, monospace; padding: 30px; border: 1px solid #000; max-width: 800px; margin: 0 auto;">
+    
+    <h1 style="text-align: center; text-decoration: underline;">DENÍK POCHYBNOSTÍ</h1>
+    
+    <div style="margin-top: 30px;">
+        <h3>ZÁZNAM: 3. LISTOPADU</h3>
+        <p>
+            Zase to udělala. Ráno u snídaně. Nalila si horkou kávu přímo do krku. Vařící. Viděl jsem páru. Ani nemrkla. Když si všimla, že se dívám, usmála se a řekla: "Je to lahodné, drahý."
+        </p>
+        <p>
+            Slovo "lahodné" nikdy nepoužívala.
+        </p>
+        <hr>
+
+        <h3>ZÁZNAM: 12. LISTOPADU</h3>
+        <p>
+            Našel jsem ve sklepě její vlasy. Chomáč vlasů ucpaný v odtoku. Ale když jsem je vytáhl, nebyly to vlasy. Byly to... tenké dráty? Nebo nějaký černý silon? Hýbalo se to, když jsem na to posvítil baterkou.
+        </p>
+        <p>
+            Když přišla domů, zeptal jsem se jí na to. Podívala se na mě tím svým novým, širokým pohledem (mrká moc málo, počítal jsem to, mrkne jednou za 4 minuty) a řekla: "Jsi unavený, Marku. Měl bys jít spát. Spánek je pro lidi důležitý."
+        </p>
+        <p>
+            Pro <strong>lidi</strong>. Ne "pro nás". Pro lidi.
+        </p>
+        <hr>
+
+        <h3>ZÁZNAM: DNES</h3>
+        <p>
+            Píšu to z koupelny. Zamkl jsem se. Ona stojí za dveřmi. Neslyším ji dýchat. Jen tam stojí. Vidím stín jejích nohou pod dveřmi. Nehýbe se už dvě hodiny.
+        </p>
+        <p>
+            Před chvílí zaklepala. Ale nebylo to zaklepání klouby. Znělo to, jako by do dřeva uhodila čelem. Tupá, tvrdá rána.
+        </p>
+        <p style="background-color: #000; color: #fff; padding: 5px;">
+            "Marku? Otevři. Kůže mě svědí. Potřebuji, abys mi pomohl rozepnout záda. Zip se zasekl."
+        </p>
+        <p>
+            Moje žena nemá na zádech žádný zip.
+            Bože, ona se snaží dostat dovnitř. Slyším škrábání. To nejsou nehty. To je kov.
+        </p>
+    </div>
+
+    <div style="margin-top: 50px; text-align: center; font-size: 0.8em; color: #cc0000;">
+        [PŘIPOJENÍ PŘERUŠENO ZDROJEM]
+    </div>
+</div>
     `,
   },
   {
@@ -877,10 +1075,52 @@ const customLinkPages = [
     address: 'relay-lambda58t.onion/shell',
     title: 'Relay Lambda',
     html: `
-      <div class="custom-page">
-        <h2>Relay Lambda</h2>
-        <p>Snippets can include game clues.</p>
-      </div>
+      <div style="background-color: #1a1a1a; color: #b0b0b0; font-family: 'Verdana', sans-serif; padding: 40px; border: 1px solid #333; line-height: 1.6;">
+    
+    <div style="border-bottom: 1px solid #2d5a2d; padding-bottom: 10px; margin-bottom: 20px;">
+        <h1 style="color: #4a8a4a; margin: 0;">NOČNÍ CHODEC</h1>
+        <p style="font-size: 0.8em; color: #666;">Blog o turistice, samotě a tichu.</p>
+    </div>
+
+    <div style="background-color: #222; padding: 20px; margin-bottom: 30px;">
+        <h2 style="color: #ccc; margin-top: 0;">Příspěvek: Už tam nikdy nepůjdu</h2>
+        <p style="font-size: 0.8em; color: #555;">Zveřejněno: 14. října 2025 | Autor: DaveWalker</p>
+        
+        <p>
+            Víte, že miluji Šumavu. Chodím tam už deset let, většinou v noci, abych se vyhnul turistům. Miluji ten zvuk, kdy vám křupe sníh nebo jehličí pod nohama a kolem je absolutní tma. Ale včera se něco stalo.
+        </p>
+        <p>
+            Byl jsem asi 5 kilometrů od nejbližší silnice. Zastavil jsem se, abych se napil. A v tom tichu, asi dvacet metrů za mnou, jsem slyšel... <em>cvaknutí</em>. Znělo to přesně jako karabina na mém batohu.
+        </p>
+        <p>
+            Řekl jsem: "Je tam někdo?"
+        </p>
+        <p>
+            Ticho. A pak, z koruny stromu přímo nade mnou, se ozval hlas. Nebyl to lidský hlas. Bylo to, jako by někdo nahrál můj hlas na starý diktafon a pustil ho pozpátku a zrychleně.
+        </p>
+        <p style="color: #a83232; font-style: italic;">
+            "J-Je t-tam ně-kdo?"
+        </p>
+        <p>
+            Nebylo to echo. Byla to imitace. Rozsvítil jsem baterku nahoru. Nic tam nebylo. Žádná sova, žádná veverka. Jen holé větve. Začal jsem couvat. A pak jsem to uslyšel znovu, tentokrát zleva, z hustého křoví. Můj vlastní hlas, smějící se mým smíchem, ale bez emocí.
+        </p>
+        <p>
+            Utíkal jsem. Celou cestu k autu jsem slyšel kroky. Ne jedny. Desítky. Jako by mě doprovázelo stádo, které ale našlapuje přesně do rytmu mých kroků, aby nebylo slyšet.
+        </p>
+        <p>
+            Když jsem nasedl do auta a zamkl, něco narazilo do zadního skla. Nebyl to kámen. Byla to dlaň. Otiskl jsem to ráno vyfotil.
+        </p>
+        <p>
+            Ty prsty jsou příliš dlouhé. Lidská ruka nemá šest článků na prstu.
+        </p>
+        
+        <div style="border-top: 1px dashed #444; margin-top: 20px; padding-top: 10px;">
+            <p style="color: #4a8a4a;">Komentáře (2):</p>
+            <p style="font-size: 0.9em;"><strong>[ForestRanger]:</strong> Smaž to. Hned. Oni nemají rádi, když se o nich mluví.</p>
+            <p style="font-size: 0.9em;"><strong>[User44]:</strong> Slyšel jsi to taky? To cvakání? Říkají tomu "Mimi". Neohlížej se, když jsi doma.</p>
+        </div>
+    </div>
+</div>
     `,
   },
   {
@@ -888,10 +1128,28 @@ const customLinkPages = [
     address: 'relay-mu93q.onion/archive',
     title: 'Relay Mu',
     html: `
-      <div class="custom-page">
-        <h2>Relay Mu</h2>
-        <p>Insert imagery via &lt;img&gt; tags if desired.</p>
-      </div>
+      <div style="background-color: #202124; color: #bdc1c6; font-family: Arial, sans-serif; height: 100vh; padding: 50px; box-sizing: border-box;">
+    <div style="font-size: 5em; margin-bottom: 20px; color: #9aa0a6;">:(</div>
+    
+    <h1 style="font-size: 2em; margin: 0 0 20px 0;">Tato stránka neexistuje. A vy také ne.</h1>
+    
+    <p style="font-size: 1.1em;">Prohlížeč nemůže nalézt realitu, kterou hledáte.</p>
+    
+    <p style="margin-top: 30px;">Možné příčiny:</p>
+    <ul style="line-height: 1.8;">
+        <li>Vaše připojení k existenci bylo přerušeno.</li>
+        <li>Ten, kdo vás sleduje přes webkameru, právě vstoupil do místnosti.</li>
+        <li>Už dávno spíte. Prosím, probuďte se.</li>
+    </ul>
+
+    <p style="margin-top: 40px; font-size: 0.9em; color: #ff4c4c;">
+        ERR_REALITY_NOT_FOUND_RUN_NOW
+    </p>
+    
+    <button style="background-color: #8ab4f8; color: #202124; border: none; padding: 10px 25px; border-radius: 5px; font-weight: bold; margin-top: 30px; cursor: not-allowed;">
+        Zkusit znovu (Nefunguje)
+    </button>
+</div>
     `,
   },
   {
@@ -899,10 +1157,24 @@ const customLinkPages = [
     address: 'relay-nu39d.onion/hub',
     title: 'Relay Nu',
     html: `
-      <div class="custom-page">
-        <h2>Relay Nu</h2>
-        <p>Perfect for mission briefings or lore.</p>
-      </div>
+    <div style="background-color: #000; color: #333; font-family: Arial, sans-serif; height: 100vh; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center;">
+    <h1 style="color: #555;">Odpočet do Singularity</h1>
+    
+    <div style="font-size: 10em; color: red; font-family: 'Courier New', monospace; font-weight: bold; text-shadow: 0 0 20px red;">
+        00:00:05
+    </div>
+    
+    <p style="font-size: 1.5em; margin-top: 30px; color: #aaa;">
+        <span style="animation: blinker 0.5s linear infinite;">VAROVÁNÍ: Bariéra reality je narušena.</span>
+    </p>
+    <p style="color: #555; font-size: 0.9em;">
+        Až to dosáhne nuly, světla zhasnou. Nejen tady. Všude. Nedýchej, možná si tě nevšimnou.
+    </p>
+    
+    <style>
+        @keyframes blinker { 50% { opacity: 0; } }
+    </style>
+</div>
     `,
   },
   {
@@ -910,14 +1182,71 @@ const customLinkPages = [
     address: 'relay-xi18m.onion/ops',
     title: 'Relay Xi',
     html: `
-      <div class="custom-page">
-        <h2>Relay Xi</h2>
-        <p>Supports lists:</p>
-        <ul>
-          <li>Step one</li>
-          <li>Step two</li>
-        </ul>
-      </div>
+      <style>
+        .relay-xi-target {
+          background-color: #050505;
+          color: #cc0000;
+          font-family: "Courier New", monospace;
+          min-height: 80vh;
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          padding: 40px 20px;
+        }
+        .relay-xi-target__panel {
+          border: 2px solid #cc0000;
+          padding: 30px;
+          width: min(640px, 100%);
+          background-color: #0a0000;
+          box-shadow: 0 0 30px rgba(200, 0, 0, 0.3);
+        }
+        .relay-xi-target__panel h1 {
+          text-align: center;
+          border-bottom: 1px dashed #cc0000;
+          padding-bottom: 15px;
+          margin-top: 0;
+          font-size: 2rem;
+          text-shadow: 0 0 10px #cc0000;
+        }
+        .relay-xi-target__row {
+          display: flex;
+          justify-content: space-between;
+          margin: 12px 0;
+          font-size: 1.1rem;
+        }
+        .relay-xi-target__label {
+          color: #666;
+        }
+        .relay-xi-target__value {
+          color: #fff;
+          font-weight: bold;
+          text-shadow: 0 0 5px #fff;
+        }
+        .relay-xi-target__message {
+          margin-top: 30px;
+          text-align: center;
+          color: #ff3333;
+          font-style: italic;
+          opacity: 0;
+          transition: opacity 2s ease;
+        }
+      </style>
+      <section class="relay-xi-target" data-relay-xi>
+        <div class="relay-xi-target__panel">
+          <h1>CÍL LOKALIZOVÁN</h1>
+          <div>
+            <p class="relay-xi-target__row"><span class="relay-xi-target__label">VEŘEJNÁ IP:</span><span class="relay-xi-target__value" data-xi-ip>SKENOVÁNÍ...</span></p>
+            <p class="relay-xi-target__row"><span class="relay-xi-target__label">POSKYTOVATEL:</span><span class="relay-xi-target__value" data-xi-isp>---</span></p>
+            <p class="relay-xi-target__row"><span class="relay-xi-target__label">MĚSTO:</span><span class="relay-xi-target__value" data-xi-city>---</span></p>
+            <p class="relay-xi-target__row"><span class="relay-xi-target__label">STÁT:</span><span class="relay-xi-target__value" data-xi-country>---</span></p>
+            <p class="relay-xi-target__row"><span class="relay-xi-target__label">OPERAČNÍ SYSTÉM:</span><span class="relay-xi-target__value" data-xi-os>---</span></p>
+            <p class="relay-xi-target__row"><span class="relay-xi-target__label">STAV BATERIE:</span><span class="relay-xi-target__value" data-xi-battery>Neznámý</span></p>
+          </div>
+          <p class="relay-xi-target__message" data-xi-message>
+            "Vím, že jsi v <span data-xi-scare-city>městě</span>. Vím, že používáš <span data-xi-scare-os>PC</span>.<br>Už nemáš kam utéct."
+          </p>
+        </div>
+      </section>
     `,
   },
   {
@@ -925,10 +1254,58 @@ const customLinkPages = [
     address: 'relay-omicron24j.onion/failsafe',
     title: 'Relay Omicron',
     html: `
-      <div class="custom-page">
-        <h2>Relay Omicron</h2>
-        <p>Drop encoded text or riddles here.</p>
-      </div>
+      <style>
+        @keyframes relay-omicron-shake {
+          0% { transform: translate(1px, 1px) rotate(0deg); }
+          10% { transform: translate(-3px, -2px) rotate(-1deg); }
+          20% { transform: translate(-5px, 0px) rotate(2deg); }
+          30% { transform: translate(5px, 4px) rotate(0deg); }
+          40% { transform: translate(3px, -3px) rotate(1deg); }
+          50% { transform: translate(-3px, 4px) rotate(-2deg); }
+          60% { transform: translate(-5px, 1px) rotate(0deg); }
+          70% { transform: translate(5px, 1px) rotate(-1deg); }
+          80% { transform: translate(-3px, -3px) rotate(2deg); }
+          90% { transform: translate(3px, 4px) rotate(0deg); }
+          100% { transform: translate(1px, -2px) rotate(-1deg); }
+        }
+        @keyframes relay-omicron-strobe {
+          0% { background-color: #000; color: #f00; }
+          50% { background-color: #f00; color: #000; }
+          100% { background-color: #fff; color: #000; }
+        }
+        @keyframes relay-omicron-appear { to { opacity: 1; } }
+        .relay-omicron-jumpscare {
+          background-color: #000;
+          color: #f00;
+          font-family: "Courier New", monospace;
+          min-height: 80vh;
+          display: flex;
+          flex-direction: column;
+          justify-content: center;
+          align-items: center;
+          text-align: center;
+          overflow: hidden;
+          padding: 40px 20px;
+          animation: relay-omicron-strobe 0.1s steps(2, jump-start) infinite 2s,
+            relay-omicron-shake 0.5s linear infinite 2s;
+        }
+        .relay-omicron-hidden {
+          font-size: clamp(2rem, 6vw, 4rem);
+          font-weight: bold;
+          opacity: 0;
+          animation: relay-omicron-appear 0.1s linear forwards 2s;
+        }
+      </style>
+      <section class="relay-omicron-jumpscare">
+        <h1 style="font-size: clamp(2rem, 5vw, 3.5rem);">CRITICAL_PROCESS_DIED</h1>
+        <p>Systém narazil na neodstranitelnou chybu. Probíhá výpis paměti...</p>
+        <p>STOP CODE: 0x0000DEAD</p>
+        <div class="relay-omicron-hidden">
+          NEDÍVEJ SE ZA SEBE<br>
+          NEDÍVEJ SE ZA SEBE<br>
+          UŽ JE TADY
+        </div>
+      </section>
     `,
   },
   {
@@ -936,10 +1313,90 @@ const customLinkPages = [
     address: 'relay-pi10f.onion/safehouse',
     title: 'Relay Pi',
     html: `
-      <div class="custom-page">
-        <h2>Relay Pi</h2>
-        <p>Great for NPC chat transcripts.</p>
-      </div>
+      <style>
+        .relay-pi-sigma {
+          background-color: #222;
+          color: #fff;
+          font-family: Arial, sans-serif;
+          min-height: 80vh;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          text-align: center;
+          padding: 40px 20px;
+          gap: 20px;
+          transition: background-color 0.5s, color 0.5s;
+        }
+        .relay-pi-sigma.panic-mode {
+          background-color: #500000;
+          color: #000;
+        }
+        .relay-pi-sigma__status {
+          font-size: clamp(1.25rem, 2vw, 1.75rem);
+          letter-spacing: 0.05em;
+        }
+        .relay-pi-sigma__timer {
+          font-size: clamp(3rem, 12vw, 8rem);
+          font-weight: bold;
+          font-family: "Courier New", monospace;
+        }
+        .relay-pi-sigma__button {
+          padding: 20px 40px;
+          font-size: 1.5rem;
+          border: none;
+          border-radius: 5px;
+          cursor: pointer;
+          background-color: #007bff;
+          color: #fff;
+          transition: transform 0.2s ease, background-color 0.2s ease;
+          will-change: transform;
+        }
+        .relay-pi-sigma__button:active {
+          background-color: #0056b3;
+        }
+        .relay-pi-sigma__terminated {
+          background-color: #000;
+          color: #f33;
+        }
+        .relay-pi-sigma__terminated-screen {
+          width: 100%;
+          min-height: 60vh;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          gap: 12px;
+          text-align: center;
+          padding: 20px;
+        }
+        .relay-pi-sigma__jumpscare {
+          width: 100%;
+          min-height: 100vh;
+          height: 100%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          background-color: #010101;
+          animation: relay-pi-jumpscare-flash 0.18s linear infinite;
+        }
+        .relay-pi-sigma__jumpscare img {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+        }
+        @keyframes relay-pi-jumpscare-flash {
+          0% { filter: brightness(0.7); }
+          40% { filter: brightness(1.3); }
+          80% { filter: brightness(0.9); }
+          100% { filter: brightness(0.7); }
+        }
+      </style>
+      <section class="relay-pi-sigma" data-relay-pi-sigma>
+        <h2 class="relay-pi-sigma__status" data-sigma-status>POTVRĎTE PŘÍTOMNOST OPERÁTORA</h2>
+        <div class="relay-pi-sigma__timer" data-sigma-timer>10.00</div>
+        <button class="relay-pi-sigma__button" data-sigma-button>JSEM ZDE</button>
+      </section>
     `,
   },
   {
@@ -947,10 +1404,127 @@ const customLinkPages = [
     address: 'relay-rho77y.onion/ledger',
     title: 'Relay Rho',
     html: `
-      <div class="custom-page">
-        <h2>Relay Rho</h2>
-        <p>Placeholder ledger UI. Replace freely.</p>
-      </div>
+      <style>
+        .relay-rho-feed {
+          background-color: #000;
+          color: #0f0;
+          font-family: "Courier New", monospace;
+          min-height: 80vh;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 20px;
+        }
+        .relay-rho-feed__viewport {
+          position: relative;
+          width: min(960px, 95vw);
+          height: min(540px, 70vh);
+          border: 2px solid #333;
+          box-shadow: 0 0 20px rgba(255, 0, 0, 0.2);
+          overflow: hidden;
+        }
+        .relay-rho-feed__video {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+          filter: grayscale(100%) contrast(150%) brightness(0.8) sepia(30%);
+          transform: scaleX(-1);
+          background: #050505;
+        }
+        .relay-rho-feed__scanlines {
+          position: absolute;
+          inset: 0;
+          background: repeating-linear-gradient(
+            to bottom,
+            transparent 0px,
+            transparent 2px,
+            rgba(0, 0, 0, 0.5) 3px,
+            rgba(0, 0, 0, 0.5) 4px
+          );
+          pointer-events: none;
+        }
+        .relay-rho-feed__overlay {
+          position: absolute;
+          inset: 0;
+          pointer-events: none;
+          padding: 20px;
+          color: #fff;
+          box-sizing: border-box;
+        }
+        .relay-rho-feed__rec {
+          color: red;
+          font-weight: bold;
+          font-size: 1.25rem;
+          animation: relay-rho-blink 1s steps(2, jump-start) infinite;
+        }
+        .relay-rho-feed__target {
+          position: absolute;
+          top: 50%;
+          left: 50%;
+          width: 280px;
+          height: 280px;
+          border: 2px dashed red;
+          transform: translate(-50%, -50%);
+          opacity: 0.6;
+        }
+        .relay-rho-feed__target label {
+          position: absolute;
+          top: -28px;
+          left: 0;
+          background: red;
+          color: #000;
+          font-size: 0.8rem;
+          padding: 2px 6px;
+        }
+        .relay-rho-feed__status {
+          position: absolute;
+          bottom: 20px;
+          left: 20px;
+          color: #00ff00;
+          font-size: 1rem;
+          text-shadow: 0 0 5px #00ff00;
+        }
+        .relay-rho-feed__error {
+          position: absolute;
+          bottom: 20px;
+          right: 20px;
+          color: #ff5555;
+          font-size: 0.95rem;
+          text-align: right;
+          max-width: 240px;
+          opacity: 0;
+          transition: opacity 0.3s ease;
+        }
+        .relay-rho-feed__error.is-visible {
+          opacity: 1;
+        }
+        @keyframes relay-rho-blink {
+          0% { opacity: 1; }
+          50% { opacity: 0.1; }
+          100% { opacity: 1; }
+        }
+      </style>
+      <section class="relay-rho-feed" data-relay-rho>
+        <div class="relay-rho-feed__viewport">
+          <video class="relay-rho-feed__video" data-rho-video autoplay playsinline muted></video>
+          <div class="relay-rho-feed__scanlines"></div>
+          <div class="relay-rho-feed__overlay">
+            <div class="relay-rho-feed__rec">● REC [LIVE FEED]</div>
+            <div style="position: absolute; top: 20px; right: 20px; text-align: right;">
+              CAM_ID: 88_USER_LOCAL<br>
+              IP: 127.0.0.1 (FOUND)
+            </div>
+            <div class="relay-rho-feed__target">
+              <label>SUBJECT DETECTED</label>
+            </div>
+            <div class="relay-rho-feed__status">
+              &gt; ANALYZING FEAR RESPONSE...<br>
+              &gt; UPLOADING BIOMETRICS TO NODE 4...
+            </div>
+            <div class="relay-rho-feed__error" data-rho-error></div>
+          </div>
+        </div>
+      </section>
     `,
   },
   {
@@ -1943,9 +2517,12 @@ const hiddenApps = {
         if (page.type === 'custom') {
           view.innerHTML = `
             <div class="custom-link-page">
-              ${page.html}
+              <div class="custom-link-page__inner" data-custom-relay="${pageId}">
+                ${page.html}
+              </div>
             </div>
           `;
+          initializeCustomNodeScripts(pageId, view);
           return;
         }
       };
@@ -3634,6 +4211,413 @@ function injectCustomLinkPages() {
 
 injectCustomLinkPages();
 
+function setupRelayPiSigma(root) {
+  if (!root || root.dataset.sigmaReady === '1') return;
+  if (gameState.relayPiLocked) {
+    root.innerHTML = '<div class="custom-page__locked"><h2>Přístup zamknut</h2><p>Relay Pi se už neznovuotevře.</p></div>';
+    return;
+  }
+  root.dataset.sigmaReady = '1';
+
+  const timerEl = root.querySelector('[data-sigma-timer]');
+  const statusEl = root.querySelector('[data-sigma-status]');
+  const buttonEl = root.querySelector('[data-sigma-button]');
+  const windowEl = root.closest('.window');
+  if (!timerEl || !statusEl || !buttonEl) return;
+
+  let timeLeft = 10;
+  let clicks = 0;
+  let timerInterval = null;
+  let jumpscareTimeout = null;
+  let tickingAudio = null;
+  let heartbeatAudio = null;
+  let heavyBreathAudio = null;
+  let jumpscareAudio = null;
+
+  const createAudio = (src, { loop = false, volume = 1 } = {}) => {
+    const audio = new Audio(src);
+    audio.loop = loop;
+    audio.volume = volume;
+    return audio;
+  };
+
+  const playAudio = (audio) => {
+    if (!audio) return;
+    audio.play().catch(() => {});
+  };
+
+  const getTickAudio = () => {
+    if (!tickingAudio) {
+      tickingAudio = createAudio('fx/ticking.mp3', { loop: true, volume: 0.7 });
+    }
+    return tickingAudio;
+  };
+
+  const getHeartbeatAudio = () => {
+    if (!heartbeatAudio) {
+      heartbeatAudio = createAudio('fx/heartbeat.mp3', { loop: false, volume: 1 });
+    }
+    return heartbeatAudio;
+  };
+
+  const getHeavyBreathAudio = () => {
+    if (!heavyBreathAudio) {
+      heavyBreathAudio = createAudio('fx/heavybreath.wav', { loop: false, volume: 0.8 });
+    }
+    return heavyBreathAudio;
+  };
+
+  const getJumpscareAudio = () => {
+    if (!jumpscareAudio) {
+      jumpscareAudio = createAudio('fx/fnafjumpscare.mp3', { volume: 1 });
+    }
+    return jumpscareAudio;
+  };
+
+  const stopAndReset = (audio) => {
+    if (!audio) return;
+    audio.pause();
+    audio.currentTime = 0;
+  };
+
+  const startTickAudio = () => {
+    const audio = getTickAudio();
+    playAudio(audio);
+  };
+
+  const stopTickAudio = () => {
+    stopAndReset(tickingAudio);
+  };
+
+  const stopJumpscareAudio = () => {
+    stopAndReset(jumpscareAudio);
+  };
+
+  const clearJumpscareTrigger = () => {
+    if (jumpscareTimeout) {
+      clearTimeout(jumpscareTimeout);
+      jumpscareTimeout = null;
+    }
+  };
+
+  const showJumpscare = () => {
+    if (windowEl) {
+      windowEl.classList.add('window--relay-pi-jumpscare');
+    }
+    root.innerHTML = `
+      <div class="relay-pi-sigma__jumpscare">
+        <img src="fx/woman-scary.jpg" alt="Unknown subject" loading="lazy">
+      </div>
+    `;
+    const scream = getJumpscareAudio();
+    scream.currentTime = 0;
+    playAudio(scream);
+    const heartbeat = getHeartbeatAudio();
+    heartbeat.currentTime = 0;
+    playAudio(heartbeat);
+    const heavyBreath = getHeavyBreathAudio();
+    heavyBreath.currentTime = 0;
+    playAudio(heavyBreath);
+    setTimeout(() => {
+      closeRelayPiForever();
+    }, 3000);
+  };
+
+  const scheduleJumpscare = () => {
+    clearJumpscareTrigger();
+    jumpscareTimeout = setTimeout(() => {
+      showJumpscare();
+    }, 2000);
+  };
+
+  const closeRelayPiForever = () => {
+    gameState.relayPiLocked = true;
+    persistState();
+    cleanup();
+    closeRelayWindow();
+  };
+
+  const closeRelayWindow = () => {
+    const targetWindow = windowEl || root.closest('.window');
+    if (!targetWindow) return;
+    const windowId = targetWindow.dataset.windowId;
+    if (windowId && openWindows.has(windowId)) {
+      closeWindow(windowId);
+    } else {
+      targetWindow.remove();
+    }
+  };
+
+  const cleanup = () => {
+    if (timerInterval) {
+      clearInterval(timerInterval);
+      timerInterval = null;
+    }
+    clearJumpscareTrigger();
+    stopTickAudio();
+    stopJumpscareAudio();
+    windowEl?.classList.remove('window--relay-pi-jumpscare');
+  };
+
+  const updateTimer = () => {
+    timerEl.textContent = timeLeft.toFixed(2);
+    timerEl.style.color = timeLeft < 3 ? '#ff4c4c' : '#ffffff';
+  };
+
+  const deathSequence = () => {
+    if (root.dataset.piDead === '1') return;
+    root.dataset.piDead = '1';
+    if (timerInterval) {
+      clearInterval(timerInterval);
+      timerInterval = null;
+    }
+    stopTickAudio();
+    clearJumpscareTrigger();
+    root.classList.remove('panic-mode');
+    root.classList.add('relay-pi-sigma__terminated');
+    root.innerHTML = `
+      <div class="relay-pi-sigma__terminated-screen">
+        <h1 style="font-size:3rem;">SPOJENÍ ZTRACENO</h1>
+        <p style="color:#ccc;">Operátor nereaguje. Uvolňuji zámek dveří...</p>
+      </div>
+    `;
+    scheduleJumpscare();
+  };
+
+  const startTimer = () => {
+    if (timerInterval) return;
+    startTickAudio();
+    timerInterval = setInterval(() => {
+      timeLeft = Math.max(0, timeLeft - 0.01);
+      updateTimer();
+      if (timeLeft <= 0) {
+        deathSequence();
+      }
+    }, 10);
+  };
+
+  const applyRandomOffset = () => {
+    const x = (Math.random() - 0.5) * 300;
+    const y = (Math.random() - 0.5) * 300;
+    buttonEl.style.transform = `translate(${x}px, ${y}px)`;
+  };
+
+  const applyShrink = () => {
+    const scaleFactor = Math.max(0.2, 1 - (clicks - 10) * 0.1);
+    buttonEl.style.transform = `scale(${scaleFactor})`;
+  };
+
+  const resetTimer = () => {
+    if (root.dataset.piDead === '1') return;
+    clearJumpscareTrigger();
+    stopJumpscareAudio();
+    startTickAudio();
+    timeLeft = 10;
+    clicks += 1;
+
+    if (clicks > 2 && clicks <= 10) {
+      applyRandomOffset();
+    } else if (clicks <= 2) {
+      buttonEl.style.transform = 'none';
+    }
+
+    if (clicks === 5) {
+      statusEl.textContent = 'ONI PŘICHÁZEJÍ. KLIKEJ RYCHLEJI.';
+      root.classList.add('panic-mode');
+    }
+
+    if (clicks === 8) {
+      buttonEl.textContent = 'NECHCI ZEMŘÍT';
+      buttonEl.style.backgroundColor = '#c00000';
+      timeLeft = 5;
+    }
+
+    if (clicks > 10) {
+      applyShrink();
+    }
+  };
+
+  buttonEl.addEventListener('click', (event) => {
+    event.preventDefault();
+    resetTimer();
+  });
+
+  updateTimer();
+  startTimer();
+
+  const observer = new MutationObserver(() => {
+    if (!document.body.contains(root)) {
+      cleanup();
+      observer.disconnect();
+    }
+  });
+  observer.observe(document.body, { childList: true, subtree: true });
+}
+
+function setupRelayIotaSigma(root) {
+  if (!root || root.dataset.iotaReady === '1') return;
+  root.dataset.iotaReady = '1';
+
+  const slider = root.querySelector('[data-iota-tuner]');
+  const display = root.querySelector('[data-iota-display]');
+  const signal = root.querySelector('[data-iota-signal]');
+  const noise = root.querySelector('[data-iota-noise]');
+  const horror = root.querySelector('[data-iota-horror]');
+  if (!slider || !display || !signal || !noise || !horror) return;
+
+  const TARGET = 1045;
+  const BASE_BG = '#001a00';
+  const ALERT_BG = '#1a0000';
+
+  const updateUI = () => {
+    const current = Number(slider.value);
+    const freq = (current / 10).toFixed(1);
+    display.textContent = `${freq} MHz`;
+
+    const diff = Math.abs(current - TARGET);
+    if (diff < 5) {
+      const width = Math.max(5, 100 - diff * 10);
+      signal.style.width = `${width}%`;
+      signal.style.backgroundColor = '#ff3b3b';
+      noise.textContent = 'PŘÍJEM SIGNÁLU: DETEKOVÁN HLAS';
+      noise.style.color = '#ff3b3b';
+      if (diff === 0) {
+        horror.classList.add('is-visible');
+        root.style.backgroundColor = ALERT_BG;
+      } else {
+        horror.classList.remove('is-visible');
+        root.style.backgroundColor = BASE_BG;
+      }
+    } else {
+      const randomWidth = Math.round(Math.random() * 10) + 5;
+      signal.style.width = `${randomWidth}%`;
+      signal.style.backgroundColor = '#00ff00';
+      noise.textContent = '[ŠUM...]';
+      noise.style.color = '#004400';
+      horror.classList.remove('is-visible');
+      root.style.backgroundColor = BASE_BG;
+    }
+  };
+
+  slider.addEventListener('input', updateUI);
+  updateUI();
+}
+
+function setupRelayXiSigma(root) {
+  if (!root || root.dataset.xiReady === '1') return;
+  root.dataset.xiReady = '1';
+
+  const ipEl = root.querySelector('[data-xi-ip]');
+  const ispEl = root.querySelector('[data-xi-isp]');
+  const cityEl = root.querySelector('[data-xi-city]');
+  const countryEl = root.querySelector('[data-xi-country]');
+  const osEl = root.querySelector('[data-xi-os]');
+  const batteryEl = root.querySelector('[data-xi-battery]');
+  const scareCityEl = root.querySelector('[data-xi-scare-city]');
+  const scareOsEl = root.querySelector('[data-xi-scare-os]');
+  const messageEl = root.querySelector('[data-xi-message]');
+  if (!ipEl || !ispEl || !cityEl || !countryEl || !osEl || !batteryEl || !scareCityEl || !scareOsEl || !messageEl) {
+    return;
+  }
+
+  const platform = navigator.platform || 'Unknown system';
+  osEl.textContent = platform;
+  scareOsEl.textContent = platform;
+
+  if (navigator.getBattery) {
+    navigator.getBattery().then((battery) => {
+      const level = Math.round(battery.level * 100);
+      const charging = battery.charging ? ' (Nabíjí se)' : '';
+      batteryEl.textContent = `${level}%${charging}`;
+    }).catch(() => {
+      batteryEl.textContent = 'Skryto';
+    });
+  }
+
+  fetch('https://ipapi.co/json/')
+    .then((response) => response.json())
+    .then((data) => {
+      ipEl.textContent = data.ip || 'MASKOVÁNO';
+      ispEl.textContent = data.org || '---';
+      cityEl.textContent = data.city || 'UNKNOWN';
+      countryEl.textContent = data.country_name || '---';
+      scareCityEl.textContent = data.city || 'městě';
+      messageEl.style.opacity = 1;
+    })
+    .catch(() => {
+      ipEl.textContent = 'CONNECTION MASKED';
+      cityEl.textContent = 'UNKNOWN';
+    });
+}
+
+function setupRelayRhoSigma(root) {
+  if (!root || root.dataset.rhoReady === '1') return;
+  root.dataset.rhoReady = '1';
+
+  const videoEl = root.querySelector('[data-rho-video]');
+  const errorEl = root.querySelector('[data-rho-error]');
+  if (!videoEl) return;
+
+  const showError = (message) => {
+    if (errorEl) {
+      errorEl.textContent = message;
+      errorEl.classList.add('is-visible');
+    }
+  };
+
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    showError('Camera interface unsupported in this browser.');
+    return;
+  }
+
+  let activeStream = null;
+
+  const cleanup = () => {
+    if (activeStream) {
+      activeStream.getTracks().forEach((track) => track.stop());
+      activeStream = null;
+    }
+  };
+
+  navigator.mediaDevices.getUserMedia({ video: true })
+    .then((stream) => {
+      activeStream = stream;
+      videoEl.srcObject = stream;
+    })
+    .catch((err) => {
+      console.error('Camera access denied for Relay Rho', err);
+      showError('Camera access denied or unavailable.');
+    });
+
+  const observer = new MutationObserver(() => {
+    if (!document.body.contains(root)) {
+      cleanup();
+      observer.disconnect();
+    }
+  });
+  observer.observe(document.body, { childList: true, subtree: true });
+}
+
+function initializeCustomNodeScripts(pageId, container) {
+  if (!container) return;
+  if (pageId === 'relay-pi10f.onion/safehouse') {
+    const root = container.querySelector('[data-relay-pi-sigma]');
+    setupRelayPiSigma(root);
+  }
+  if (pageId === 'relay-iota20x.onion/trace') {
+    const root = container.querySelector('[data-relay-iota]');
+    setupRelayIotaSigma(root);
+  }
+  if (pageId === 'relay-xi18m.onion/ops') {
+    const root = container.querySelector('[data-relay-xi]');
+    setupRelayXiSigma(root);
+  }
+  if (pageId === 'relay-rho77y.onion/ledger') {
+    const root = container.querySelector('[data-relay-rho]');
+    setupRelayRhoSigma(root);
+  }
+}
+
 function incrementAlerts(message) {
   gameState.alerts += 1;
   updateStatusBar(message);
@@ -4679,6 +5663,7 @@ if (powerMenuBtn) {
 }
 
 const goToPowerScreen = () => {
+  setDesktopPaused(true);
   audioManager.stop("ambiance");
   audioManager.stop("pcStart");
   audioManager.stop("keyboard");
@@ -4707,6 +5692,7 @@ if (btnLogout) {
     audioManager.stop("ambiance");
     desktopScreen.style.display = "none";
     loginScreen.style.display = "flex";
+    setDesktopPaused(true);
     
     // Fade in login screen
     setTimeout(() => {
