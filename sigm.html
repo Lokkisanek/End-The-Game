@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <title>GATEWAY_VERIFICATION</title>
+    <style>
+        body {
+            background-color: #f0f0f0;
+            color: #333;
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
+        .captcha-box {
+            background: white;
+            padding: 40px;
+            border: 1px solid #ccc;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            width: 400px;
+            text-align: center;
+        }
+        .question {
+            font-size: 1.2em;
+            margin-bottom: 20px;
+        }
+        .btn {
+            padding: 10px 20px;
+            margin: 5px;
+            cursor: pointer;
+            border: 1px solid #999;
+            background: #eee;
+        }
+        .btn:hover { background: #ddd; }
+        .error-msg {
+            color: red;
+            margin-top: 15px;
+            font-size: 0.9em;
+            display: none;
+        }
+        .glitch-text {
+            animation: shake 0.5s infinite;
+            color: red;
+            font-weight: bold;
+        }
+        @keyframes shake {
+            0% { transform: translate(1px, 1px) rotate(0deg); }
+            100% { transform: translate(-1px, -2px) rotate(-1deg); }
+        }
+    </style>
+</head>
+<body>
+
+<div class="captcha-box" id="panel">
+    <h2>Bezpečnostní Kontrola</h2>
+    <p style="font-size: 0.8em; color: #666;">Prosím potvrďte, že jste biologický organismus.</p>
+    <hr>
+    
+    <div id="q-container">
+        <p class="question" id="q-text">Cítíte bolest, když vidíte utrpení jiných?</p>
+        <button class="btn" onclick="nextQ(true)">ANO</button>
+        <button class="btn" onclick="nextQ(false)">NE</button>
+    </div>
+
+    <p class="error-msg" id="error">ODPOVĚĎ NEODPOVÍDÁ LIDSKÉMU PROFILU. ZKUSTE TO ZNOVU.</p>
+</div>
+
+<script>
+    let stage = 0;
+    const questions = [
+        "Cítíte bolest, když vidíte utrpení jiných?",
+        "Máte kůži? Jste si jistí?",
+        "Kdybyste se probudili bez úst, křičeli byste?",
+        "Vidíte ty stíny v rohu vaší místnosti?", // Zde začíná horor
+        "JSTE SI JISTÍ, ŽE NEJSTE JEN KÓD?"
+    ];
+
+    function nextQ(answer) {
+        const err = document.getElementById('error');
+        const qText = document.getElementById('q-text');
+        
+        // Logika "plynulého šílenství"
+        if (stage === 0) {
+            stage++;
+            qText.innerText = questions[stage];
+            err.style.display = "none";
+        } else if (stage === 1) {
+            stage++;
+            qText.innerText = questions[stage];
+        } else if (stage === 2) {
+            stage++;
+            qText.innerText = questions[stage];
+            // Změna stylu na tmavý
+            document.body.style.backgroundColor = "#111";
+            document.querySelector('.captcha-box').style.backgroundColor = "#000";
+            document.querySelector('.captcha-box').style.color = "#fff";
+            document.querySelector('.captcha-box').style.borderColor = "red";
+        } else if (stage === 3) {
+            stage++;
+            qText.innerText = questions[stage];
+            qText.className = "question glitch-text";
+        } else {
+            // Finále
+            document.getElementById('q-container').innerHTML = "<h1 style='color:red; font-size:3em;'>CHYBA BIOLOGIE</h1><p>Subjekt identifikován jako: NEKOMPATIBILNÍ.</p>";
+            // Zde bys mohl spustit zvukový efekt
+        }
+    }
+</script>
+
+</body>
+</html>

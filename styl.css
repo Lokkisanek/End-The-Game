@@ -1,0 +1,84 @@
+
+    /* Styling z Erowid.org/Archivní styl */
+    body {
+        background-color: #FFFFFF;
+        color: #000000;
+        font-family: 'Times New Roman', Times, serif;
+        margin: 0;
+        padding: 0;
+        line-height: 1.4;
+    }
+    
+    /* Kontejner stranky uvnitr divu */
+    #main_page_container {
+        width: 900px;
+        margin: 10px auto;
+        border: 1px solid #CCCCCC;
+        box-sizing: border-box; /* Zajišťuje, že ohraničení je uvnitř 900px */
+    }
+    
+    .header {
+        background-color: #DDDDDD;
+        padding: 8px 15px;
+        font-size: 1.2em;
+        font-weight: bold;
+        border-bottom: 1px solid #CCCCCC;
+    }
+    
+    .sidebar {
+        width: 180px;
+        vertical-align: top;
+        padding: 10px;
+        border-right: 1px solid #CCCCCC;
+        background-color: #F7F7F7;
+    }
+    
+    .content {
+        vertical-align: top;
+        padding: 15px;
+        font-size: 0.95em;
+    }
+    
+    a {
+        color: #0000CC;
+        text-decoration: underline;
+    }
+    
+    a:hover {
+        color: #CC0000;
+    }
+
+    ul.menu {
+        list-style-type: none;
+        padding: 0;
+        margin-top: 5px;
+    }
+    
+    ul.menu li {
+        margin-bottom: 5px;
+        border-bottom: 1px dotted #AAAAAA;
+        padding-bottom: 2px;
+    }
+
+    h1 {
+        color: #333333;
+        font-size: 1.8em;
+        border-bottom: 1px solid #333333;
+        padding-bottom: 5px;
+    }
+
+    blockquote {
+        background-color: #FFFFCC;
+        border: 1px dashed #CC9900;
+        padding: 10px;
+        margin: 10px 0;
+    }
+    
+    .disclaimer_legal {
+        margin-top: 20px;
+        padding: 8px;
+        border-top: 2px solid #CC0000;
+        color: #CC0000;
+        font-size: 0.8em;
+        text-align: center;
+    }

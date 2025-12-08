@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <title>SYSTEM_CHECK_PROTOCOL</title>
+    <style>
+        body {
+            background-color: #222;
+            color: #fff;
+            font-family: Arial, sans-serif;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            transition: background-color 0.5s;
+        }
+        #timer {
+            font-size: 8em;
+            font-weight: bold;
+            font-family: monospace;
+        }
+        button {
+            padding: 20px 40px;
+            font-size: 1.5em;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            cursor: pointer;
+            border-radius: 5px;
+            position: relative; /* Abychom s tím mohli hýbat */
+        }
+        button:active { background-color: #0056b3; }
+        
+        .panic-mode {
+            background-color: #500000 !important;
+            color: black;
+        }
+    </style>
+</head>
+<body>
+
+    <h2 id="status">POTVRĎTE PŘÍTOMNOST OPERÁTORA</h2>
+    <div id="timer">10.00</div>
+    <br>
+    <button id="reset-btn" onclick="resetTimer()">JSEM ZDE</button>
+
+<script>
+    let timeLeft = 10.00;
+    let clicks = 0;
+    let timerInterval;
+    let panic = false;
+
+    function startTimer() {
+        timerInterval = setInterval(() => {
+            timeLeft -= 0.01;
+            document.getElementById('timer').innerText = timeLeft.toFixed(2);
+
+            // Změna barvy při docházejícím čase
+            if (timeLeft < 3.00) {
+                document.getElementById('timer').style.color = "red";
+            } else {
+                document.getElementById('timer').style.color = "white";
+            }
+
+            // Konec času
+            if (timeLeft <= 0) {
+                clearInterval(timerInterval);
+                document.getElementById('timer').innerText = "0.00";
+                deathSequence();
+            }
+        }, 10);
+    }
+
+    function resetTimer() {
+        // Reset času
+        timeLeft = 10.00;
+        clicks++;
+        
+        // Ztížení hry
+        const btn = document.getElementById('reset-btn');
+        const status = document.getElementById('status');
+
+        if (clicks > 2) {
+            // Náhodná pozice tlačítka
+            const x = (Math.random() - 0.5) * 300;
+            const y = (Math.random() - 0.5) * 300;
+            btn.style.transform = `translate(${x}px, ${y}px)`;
+        }
+
+        if (clicks === 5) {
+            status.innerText = "ONI PŘICHÁZEJÍ. KLIKEJ RYCHLEJI.";
+            document.body.classList.add("panic-mode");
+        }
+        
+        if (clicks === 8) {
+            btn.innerText = "NECHCI ZEMŘÍT";
+            btn.style.backgroundColor = "red";
+            timeLeft = 5.00; // Zkrácení času!
+        }
+
+        if (clicks > 10) {
+             // Tlačítko se zmenšuje
+             btn.style.transform = `scale(${1 - (clicks-10)*0.1})`;
+        }
+    }
+
+    function deathSequence() {
+        document.body.style.backgroundColor = "black";
+        document.body.innerHTML = "<h1 style='color:red; font-size:4em; text-align:center;'>SPOJENÍ ZTRACENO</h1><p style='color:gray; text-align:center;'>Operátor nereaguje. Uvolňuji zámek dveří...</p>";
+    }
+
+    // Start hry
+    startTimer();
+</script>
+
+</body>
+</html>

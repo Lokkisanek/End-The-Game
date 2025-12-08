@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <title>SYSTEM_OVERRIDE_CAM_01</title>
+    <style>
+        body {
+            background-color: #000;
+            margin: 0;
+            padding: 0;
+            height: 100vh;
+            overflow: hidden;
+            font-family: 'Courier New', monospace;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        /* Kontejner pro video */
+        .cam-wrapper {
+            position: relative;
+            width: 90%;
+            height: 90%;
+            border: 2px solid #333;
+            box-shadow: 0 0 20px rgba(255, 0, 0, 0.2);
+        }
+
+        /* Samotné video */
+        video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            /* Filtry pro "creep" efekt: Černobílá, vysoký kontrast, rozmazání */
+            filter: grayscale(100%) contrast(150%) brightness(0.8) sepia(30%);
+            transform: scaleX(-1); /* Zrcadlové otočení (volitelné) */
+        }
+
+        /* Efekt řádkování (Scanlines) */
+        .scanlines {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: repeating-linear-gradient(
+                to bottom,
+                transparent 0px,
+                transparent 2px,
+                rgba(0, 0, 0, 0.5) 3px,
+                rgba(0, 0, 0, 0.5) 4px
+            );
+            pointer-events: none; /* Aby nešlo kliknout */
+            z-index: 2;
+        }
+
+        /* Overlay texty (REC, čas, detekce) */
+        .overlay-ui {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 3;
+            pointer-events: none;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+
+        .rec-indicator {
+            color: red;
+            font-weight: bold;
+            font-size: 1.5em;
+            animation: blink 1s infinite;
+        }
+
+        .target-box {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 300px;
+            height: 300px;
+            border: 2px dashed red;
+            opacity: 0.6;
+        }
+        
+        .face-detect-text {
+            position: absolute;
+            top: -25px;
+            left: 0;
+            background: red;
+            color: black;
+            font-size: 0.8em;
+            padding: 2px 5px;
+        }
+
+        .bottom-text {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            color: #00ff00;
+            font-size: 1.2em;
+            text-shadow: 0 0 5px #00ff00;
+        }
+
+        @keyframes blink {
+            50% { opacity: 0; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="cam-wrapper">
+    <video id="webcam" autoplay playsinline></video>
+    
+    <div class="scanlines"></div>
+    
+    <div class="overlay-ui">
+        <div class="rec-indicator">● REC [LIVE FEED]</div>
+        <div style="position: absolute; top: 20px; right: 20px; color: white;">
+            CAM_ID: 88_USER_LOCAL<br>
+            IP: 127.0.0.1 (FOUND)
+        </div>
+
+        <div class="target-box">
+            <div class="face-detect-text">SUBJECT DETECTED</div>
+        </div>
+
+        <div class="bottom-text">
+            > ANALYZING FEAR RESPONSE...<br>
+            > UPLOADING BIOMETRICS TO NODE 4...
+        </div>
+    </div>
+</div>
+
+<script>
+    // Funkce pro přístup ke kameře
+    async function startCamera() {
+        const videoElement = document.getElementById('webcam');
+        
+        // Zkontrolujeme, jestli prohlížeč podporuje mediaDevices
+        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+            try {
+                // Požadavek na video stream
+                const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+                videoElement.srcObject = stream;
+            } catch (error) {
+                console.error("Chyba při přístupu ke kameře:", error);
+                alert("Hra vyžaduje přístup ke kameře pro tento level. (Nebo jste to zamítli).");
+            }
+        } else {
+            alert("Váš prohlížeč nepodporuje přístup ke kameře.");
+        }
+    }
+
+    // Spustit hned po načtení
+    window.addEventListener('load', startCamera);
+</script>
+
+</body>
+</html>

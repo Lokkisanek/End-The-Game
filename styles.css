@@ -40,6 +40,59 @@ body {
   overflow: hidden;
 }
 
+#intro-screen {
+  position: fixed;
+  inset: 0;
+  background: #000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 120000;
+  opacity: 1;
+  transition: opacity 0.6s ease;
+  pointer-events: auto;
+}
+
+#intro-screen.intro-screen--hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.intro-content {
+  max-width: 720px;
+  padding: 2.5rem 2rem;
+  text-align: center;
+  display: grid;
+  gap: 1.4rem;
+  color: #f5f5f5;
+}
+
+.intro-icon {
+  width: 112px;
+  height: 112px;
+  justify-self: center;
+  object-fit: contain;
+  display: none;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.intro-text h1 {
+  font-size: clamp(1.8rem, 3vw, 2.4rem);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+.intro-text p {
+  font-size: clamp(1rem, 2.4vw, 1.2rem);
+  line-height: 1.6;
+  color: #d7d7d7;
+}
+
+#intro-skip {
+  display: none;
+}
+
 #standalone-browser {
   position: fixed;
   inset: 36px;

@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <title>UVB-76_DIGITAL</title>
+    <style>
+        body {
+            background-color: #001a00;
+            color: #00ff00;
+            font-family: 'Courier New', monospace;
+            padding: 50px;
+            text-align: center;
+        }
+        input[type=range] {
+            width: 80%;
+            margin: 40px 0;
+        }
+        .display {
+            font-size: 4em;
+            border: 2px solid #004400;
+            background: #000;
+            padding: 20px;
+            margin-bottom: 20px;
+            text-shadow: 0 0 10px #00ff00;
+        }
+        .signal-bar {
+            height: 20px;
+            background-color: #003300;
+            width: 80%;
+            margin: 0 auto;
+            position: relative;
+        }
+        .signal-fill {
+            height: 100%;
+            background-color: #00ff00;
+            width: 5%;
+            transition: width 0.1s;
+            box-shadow: 0 0 15px #00ff00;
+        }
+        .hidden-msg {
+            display: none;
+            color: red;
+            font-weight: bold;
+            margin-top: 30px;
+            font-size: 1.5em;
+            animation: flash 0.2s infinite;
+        }
+        @keyframes flash {
+            0% { opacity: 1; }
+            50% { opacity: 0; }
+        }
+    </style>
+</head>
+<body>
+
+    <h1>SHORTWAVE RECEIVER v4.0</h1>
+    <p>Ladění frekvence (MHz)</p>
+
+    <div class="display" id="freq-display">88.0 MHz</div>
+    
+    <div class="signal-bar">
+        <div class="signal-fill" id="signal-strength"></div>
+    </div>
+
+    <input type="range" min="880" max="1080" value="880" id="tuner" oninput="tuneRadio()">
+
+    <div id="noise-text" style="margin-top: 20px; color: #004400;">
+        [ŠUM...]
+    </div>
+
+    <div class="hidden-msg" id="horror-msg">
+        NĚKDO KLEPE NA TVOJE OKNO.<br>
+        NĚKDO KLEPE NA TVOJE OKNO.<br>
+        NĚKDO KLEPE NA TVOJE OKNO.
+    </div>
+
+<script>
+    function tuneRadio() {
+        const val = document.getElementById('tuner').value;
+        const display = document.getElementById('freq-display');
+        const signal = document.getElementById('signal-strength');
+        const noise = document.getElementById('noise-text');
+        const horror = document.getElementById('horror-msg');
+
+        // Formátování frekvence (např. 104.5)
+        display.innerText = (val / 10).toFixed(1) + " MHz";
+
+        // Cílová frekvence "démona" je 104.5 MHz (val 1045)
+        const target = 1045;
+        const diff = Math.abs(val - target);
+
+        // Logika síly signálu
+        if (diff < 5) {
+            // Jsme blízko
+            signal.style.width = (100 - (diff * 10)) + "%";
+            signal.style.backgroundColor = "red";
+            noise.innerText = "PRÍJEM SIGNÁLU: DETEKOVÁN HLAS";
+            noise.style.color = "red";
+            
+            if (diff === 0) {
+                // Přesný zásah
+                horror.style.display = "block";
+                document.body.style.backgroundColor = "#1a0000";
+            } else {
+                horror.style.display = "none";
+                document.body.style.backgroundColor = "#001a00";
+            }
+        } else {
+            // Jsme daleko
+            signal.style.width = Math.random() * 10 + "%"; // Náhodný šum
+            signal.style.backgroundColor = "#00ff00";
+            noise.innerText = "[ŠUM...]";
+            noise.style.color = "#004400";
+            horror.style.display = "none";
+            document.body.style.backgroundColor = "#001a00";
+        }
+    }
+</script>
+
+</body>
+</html>

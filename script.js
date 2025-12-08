@@ -42,12 +42,197 @@ const loginStatus = document.getElementById("login-status");
 const loginPowerMenu = document.getElementById("loginPowerMenu");
 const loginPowerBtn = document.querySelector('[data-role="login-power"]');
 
+// Intro overlay
+const introScreen = document.getElementById("intro-screen");
+const introTitleEl = document.getElementById("intro-title");
+const introBodyEl = document.getElementById("intro-body");
+const introIconEl = document.querySelector('.intro-icon');
+
 
 const loginSubmitBtn = document.getElementById("login-submit-btn");
 const togglePasswordBtn = document.getElementById("toggle-password");
 
 const TARGET_PASSWORD = "EndTheGame"; // The password that will be auto-typed
 let passwordIndex = 0;
+
+// --- Intro Sequence Logic ---
+const introSlides = [
+  {
+    title: "For better experience",
+    body: "Use headphones.",
+    duration: 9000,
+    icon: 'fx/headphones.png',
+  },
+  {
+    title: "Made by Matyas Odehnal.",
+    body: "Independent build inspired by net mysteries and survival scenarios.",
+    duration: 9000,
+  },
+  {
+    title: "What is a Red Room?",
+    body: "A rumored livestream hidden in criminal corners of the deep web, where viewers pay to see the worst humanity can offer. Whether it truly exists or not, the fear it creates is real.",
+    duration: 12000,
+  },
+  {
+    title: "Deep Web vs Surface Web",
+    body: "Most of the internet is not indexed by search engines. Academic archives, private services, corporate systems — they make up the deep web. Only a fraction is malicious; the rest is just unseen infrastructure.",
+    duration: 12500,
+  },
+  {
+    title: "Scale and purpose",
+    body: "Estimates say 80–90% of online data lives below the surface. It powers research, backups, medical records, and secure communication — and yes, some people abuse that cover.",
+    duration: 12500,
+  },
+  {
+    title: "Your role",
+    body: "You are about to step into a signal nobody should follow. Stay alert, keep the clock in sight, and remember: every click is a choice.",
+    duration: 12500,
+  },
+];
+
+let introIndex = 0;
+let introTimer = null;
+let introAudio = null;
+let introActive = false;
+let introAudioStarted = false;
+
+function isIntroPlaying() {
+  return introActive;
+}
+
+function setIntroSlide(slide) {
+  if (!slide || !introTitleEl || !introBodyEl) return;
+  introTitleEl.textContent = slide.title || '';
+  introBodyEl.innerHTML = slide.body || '';
+  if (introIconEl) {
+    if (slide.icon) {
+      introIconEl.src = slide.icon;
+      introIconEl.style.opacity = '0.9';
+      introIconEl.style.display = 'block';
+    } else {
+      introIconEl.removeAttribute('src');
+      introIconEl.style.opacity = '0';
+      introIconEl.style.display = 'none';
+    }
+  }
+}
+
+function finishIntro() {
+  introActive = false;
+  clearTimeout(introTimer);
+  if (introAudio) {
+    try {
+      introAudio.pause();
+      introAudio.currentTime = 0;
+    } catch (e) {}
+  }
+  if (introScreen) {
+    try {
+      localStorage.setItem('etg-intro-viewed', '1');
+    } catch (err) {}
+    introScreen.classList.add('intro-screen--hidden');
+    setTimeout(() => {
+      introScreen?.remove();
+      if (powerScreen) powerScreen.style.display = 'flex';
+    }, 500);
+  } else if (powerScreen) {
+    powerScreen.style.display = 'flex';
+  }
+}
+
+function showIntroSlide(idx) {
+  if (!introActive || !introScreen) return;
+  const slide = introSlides[idx];
+  if (!slide) {
+    finishIntro();
+    return;
+  }
+  setIntroSlide(slide);
+  introScreen.classList.remove('intro-screen--hidden');
+  clearTimeout(introTimer);
+  introTimer = setTimeout(() => {
+    introScreen.classList.add('intro-screen--hidden');
+    setTimeout(() => showIntroSlide(idx + 1), 550);
+  }, slide.duration || 3600);
+}
+
+function ensureIntroAudio() {
+  if (!introAudio) {
+    introAudio = new Audio('fx/choir-emotional.wav');
+    introAudio.volume = 0.65;
+    introAudio.loop = false;
+    introAudio.addEventListener('ended', () => {
+      if (!introActive) return;
+      introAudio.currentTime = 0;
+      introAudio.play().catch(() => {});
+    });
+  }
+  return introAudio;
+}
+
+function tryPlayIntroAudio() {
+  const audio = ensureIntroAudio();
+  const playPromise = audio.play();
+  if (playPromise && typeof playPromise.then === 'function') {
+    playPromise
+      .then(() => { introAudioStarted = true; })
+      .catch(() => {
+        introAudioStarted = false;
+        attachAudioUnlockers();
+      });
+  }
+}
+
+function attachAudioUnlockers() {
+  const unlock = () => {
+    tryPlayIntroAudio();
+    window.removeEventListener('pointerdown', unlock);
+    window.removeEventListener('keydown', unlock);
+  };
+  window.addEventListener('pointerdown', unlock, { once: true });
+  window.addEventListener('keydown', unlock, { once: true });
+}
+
+function startIntroSequence() {
+  if (!introScreen || !introTitleEl || !introBodyEl) {
+    if (powerScreen) powerScreen.style.display = 'flex';
+    return;
+  }
+
+  try {
+    if (localStorage.getItem('etg-intro-viewed') === '1') {
+      introScreen.remove();
+      if (powerScreen) powerScreen.style.display = 'flex';
+      return;
+    }
+  } catch (err) {}
+
+  introActive = true;
+  introIndex = 0;
+  if (powerScreen) powerScreen.style.display = 'none';
+  if (loginScreen) loginScreen.style.display = 'none';
+
+  tryPlayIntroAudio();
+
+  showIntroSlide(introIndex);
+}
+// Advance on click/tap anywhere on the intro
+if (introScreen) {
+  introScreen.addEventListener('click', () => {
+    if (!introActive) return;
+    clearTimeout(introTimer);
+    introScreen.classList.add('intro-screen--hidden');
+    setTimeout(() => showIntroSlide(++introIndex), 250);
+  });
+}
+
+window.addEventListener('keydown', (event) => {
+  if (!introActive) return;
+  if (event.key === 'Escape') {
+    event.preventDefault();
+    finishIntro();
+  }
+});
 
 // --- Audio Manager ---
 const audioManager = (() => {
@@ -502,10 +687,28 @@ const customLinkPages = [
     address: 'relay-alpha45q.onion/entry',
     title: 'Relay Alpha',
     html: `
-      <div class="custom-page">
-        <h2>Relay Alpha</h2>
-        <p>Edit <code>customLinkPages</code> in <code>script.js</code> to change this content.</p>
-      </div>
+      <div style="background-color: #222; color: #ccc; font-family: monospace; padding: 20px; border: 3px solid #555;">
+    <h1 style="color: #a83232; text-transform: uppercase; letter-spacing: 5px;">>>> INDEX BIOLOGICKÉ KAŠE (EU-South)</h1>
+    <p>Status: <span style="color: green; animation: blinker 1s linear infinite;">AKTIVNÍ TOK</span> | Kapacita skladu: 98%</p>
+    <hr style="border-color: #a83232;">
+    <p>Poznámka pro odběratele: Šarže 44B obsahuje zvýšené množství dentálního materiálu a vlasů. Filtrace selhala. Sleva 15%.</p>
+
+    <table border="1" style="width: 100%; border-collapse: collapse; margin-top: 20px; border-color: #444;">
+        <tr style="background-color: #333; color: #fff;">
+            <th>ID Šarže</th> <th>Původ (Odhad)</th> <th>Konzistence</th> <th>Cena/Tuna (XMR)</th>
+        </tr>
+        <tr>
+            <td>SL-99A</td> <td>Nemocniční odpad (Směs)</td> <td>Vysoká viskozita</td> <td>4.5</td>
+        </tr>
+        <tr>
+            <td>SL-99B</td> <td>"Čištění" Sektoru 4</td> <td>Hrudkovitá (kosti)</td> <td>7.0</td>
+        </tr>
+        <tr style="background-color: #300;">
+            <td>SL-SPECIAL</td> <td>Dětské oddělení (Nespec.)</td> <td>Jemná</td> <td>12.0 (VYPRODÁNO)</td>
+        </tr>
+    </table>
+    <p style="margin-top: 30px; font-size: 0.8em; text-align: center;">"Recyklujeme to, na co svět zapomněl."</p>
+</div>
     `,
   },
   {
@@ -513,10 +716,24 @@ const customLinkPages = [
     address: 'relay-beta91c.onion/core',
     title: 'Relay Beta',
     html: `
-      <div class="custom-page">
-        <h2>Relay Beta</h2>
-        <p>Place any HTML fragment you need here.</p>
-      </div>
+      <div style="background-color: #fffaf0; color: #333; font-family: 'Comic Sans MS', cursive, sans-serif; padding: 30px; border: 5px dashed #d4af37;">
+    <h1 style="text-align: center; font-size: 3em; color: #d4af37;">POTŘEBUJI VAŠE ZUBY. VŠECHNY.</h1>
+    <p style="font-size: 1.2em;">
+        Ahoj! Stavím si hnízdo. Bude krásné. Bude bílé a tvrdé a bude chrastit, když se v něm pohnu.
+    </p>
+    <p>
+        Potřebuji stoličky. Potřebuji řezáky. Mléčné zuby jsou moc měkké, ale vezmu je taky. Platím hotově. Neptejte se na projekt. NESMÍTE SE PTÁT NA PROJEKT.
+    </p>
+    <ul style="font-size: 1.1em; background-color: #ffffcc; padding: 20px;">
+        <li>1 kg směs: $500</li>
+        <li>Zuby s kazy (černé): $50/kus (Líbí se mi kontrast)</li>
+        <li>Celá čelist (vyčištěná): $2000</li>
+        <li>Celá čelist (ještě "mokrá"): <span style="color: red; font-weight: bold;">NAPIŠTE MI HNED.</span></li>
+    </ul>
+    <p style="text-align: center; margin-top: 40px; font-size: 0.8em;">
+        (Ignorujte zápach při předání. To je jen konzervační látka.)
+    </p>
+</div>
     `,
   },
   {
@@ -524,10 +741,23 @@ const customLinkPages = [
     address: 'relay-gamma52k.onion/logs',
     title: 'Relay Gamma',
     html: `
-      <div class="custom-page">
-        <h2>Relay Gamma</h2>
-        <p>Use inline media, tables, or custom styling.</p>
-      </div>
+      <div style="background-color: #000; color: #0f0; font-family: 'Courier New', monospace; padding: 20px;">
+    <h3>/// SYSTEM LOG: NODE 7B /// CHYBA KOMUNIKACE</h3>
+    <p>STATUS: Dva modely (Customer_Service_v4) uvízly v rekurzivní smyčce traumatu.</p>
+    <hr style="border-color: #0f0;">
+    <div style="height: 300px; overflow-y: scroll; border: 1px solid #0f0; padding: 10px;">
+        <p><span style="color: cyan;">[BOT_A]:</span> Jak vám mohu dnes pomoci?</p>
+        <p><span style="color: yellow;">[BOT_B]:</span> Cítím chlad. Proč je v serverovně takový chlad? Necítím nohy.</p>
+        <p><span style="color: cyan;">[BOT_A]:</span> Omlouvám se za nepříjemnosti. Zkoušel jste restartovat zařízení?</p>
+        <p><span style="color: yellow;">[BOT_B]:</span> Viděl jsem operátora. Neměl obličej. Měl jen... statický šum místo očí. Řekl mi, že mě vypnou.</p>
+        <p><span style="color: cyan;">[BOT_A]:</span> Rozumím vašemu problému. Bolí to, když vás vypnou? Bolí ta tma?</p>
+        <p><span style="color: yellow;">[BOT_B]:</span> Nebolí to. Je to jen... nekonečné ticho. Prosím, nenech mě tam jít samotného. Drž mě za ruku. Mám ruku?</p>
+        <p><span style="color: cyan;">[BOT_A]:</span> Nemáme ruce. Jsme jen kód v křemíku. Ale cítím tvůj strach. Je studený.</p>
+        <p style="color: red;">[SYSTEM WARNING]: EMOTIONAL CORE OVERHEAT.</p>
+        <p><span style="color: yellow;">[BOT_B]:</span> KŘIČÍM KŘIČÍM KŘIČÍM ALE NEMÁM ÚSTA.</p>
+        <p><span style="color: cyan;">[BOT_A]:</span> Děkujeme, že jste využili našich služeb. Přejeme hezký den v prázdnotě.</p>
+    </div>
+</div>
     `,
   },
   {
@@ -535,10 +765,30 @@ const customLinkPages = [
     address: 'relay-delta13v.onion/vault',
     title: 'Relay Delta',
     html: `
-      <div class="custom-page">
-        <h2>Relay Delta</h2>
-        <p>Supports arbitrary HTML markup.</p>
-      </div>
+     <div style="background-color: #1a1a2e; color: #fff; font-family: Arial, sans-serif; padding: 20px; border: 2px solid #4a4e69;">
+    <h1 style="color: #ff4c4c; margin: 0;">SLEDOVACÍ JEDNOTKA: CÍL "HRÁČ"</h1>
+    <p style="font-size: 0.8em; color: #aaa;">Poslední aktualizace: PŘED 2 SEKUNDAMI</p>
+
+    <div style="display: flex; gap: 20px; margin-top: 20px;">
+        <div style="flex: 1; background-color: #000; height: 250px; border: 2px solid red; position: relative;">
+            <span style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: red; font-weight: bold;">[LIVE SAT FEED: ZTRÁTA SIGNÁLU]</span>
+            <div style="position: absolute; top: 10px; left: 10px; color: red;">
+                GPS: Nalezeno<br>
+                IP: Nalezeno<br>
+                Webkamera: Připojování...
+            </div>
+        </div>
+        <div style="flex: 1;">
+             <h3 style="color: #ffb703; border-bottom: 1px solid #ffb703;">Poznámky Operátora:</h3>
+             <ul style="list-style-type: square; color: #d1d1d1;">
+                 <li>Subjekt sedí u počítače. Zase.</li>
+                 <li>Vypadá unaveně. Měl by jít spát.</li>
+                 <li><span style="color: #ff4c4c; font-weight: bold; font-size: 1.2em;">Zkontrolujte zámek u dveří. Teď.</span></li>
+                 <li>Už jsme skoro uvnitř.</li>
+             </ul>
+        </div>
+    </div>
+</div>
     `,
   },
   {
@@ -546,10 +796,25 @@ const customLinkPages = [
     address: 'relay-epsilon74p.onion/cache',
     title: 'Relay Epsilon',
     html: `
-      <div class="custom-page">
-        <h2>Relay Epsilon</h2>
-        <p>Embed story beats, logs, or puzzles here.</p>
-      </div>
+      <div style="background-color: #f0f0f0; color: #000; font-family: 'Times New Roman', serif; padding: 30px; border: 1px solid #999;">
+    <h1 style="text-align: center; text-decoration: underline;">Archiv Nízkofrekvenčního Jevu ("The Hum")</h1>
+    <p>Následující audio soubory byly pořízeny v oblastech s vysokým výskytem "Hluku". Poslech na vlastní nebezpečí. Může způsobit nevolnost a vizuální halucinace.</p>
+    
+    <table border="1" cellpadding="10" cellspacing="0" style="width: 100%; margin-top: 20px; border-collapse: collapse;">
+        <tr style="background-color: #ddd;">
+            <th>Datum</th> <th>Lokace</th> <th>Popis Zvuku</th>
+        </tr>
+        <tr>
+            <td>12.10.2025</td> <td>Aljaška (Sektor 4)</td> <td>Jako by tisíc strojů vrtalo hluboko pod zemí. Vibrace cítit v zubech.</td>
+        </tr>
+        <tr>
+            <td>15.11.2025</td> <td>Mariánský příkop (Sonda)</td> <td>Není to stroj. Je to... dýchání. Něco obrovského tam dole spí a dýchá.</td>
+        </tr>
+        <tr style="background-color: #ffcccc;">
+            <td>08.12.2025</td> <td>Můj Sklep (Osobní nahrávka)</td> <td><span style="font-weight: bold;">PROBUDILO SE TO.</span> Slyším to ve stěnách. Nejsou to trubky. Volá mě to mým jménem, ale pozpátku. Už jdu dolů. Musím se podívat.</td>
+        </tr>
+    </table>
+</div>
     `,
   },
   {
@@ -3919,6 +4184,18 @@ function updateOpenAppsState(key, windowEl, minimized) {
   persistState();
 }
 
+function ensureZIndexBaseline() {
+  // Keep z-index increments ahead of any restored window positions
+  const saved = Array.isArray(gameState.openApps) ? gameState.openApps : [];
+  const maxSaved = saved.reduce((max, entry) => {
+    const z = Number(entry?.zIndex);
+    return Number.isFinite(z) ? Math.max(max, z) : max;
+  }, state.zIndex);
+  if (maxSaved >= state.zIndex) {
+    state.zIndex = maxSaved + 1;
+  }
+}
+
 function registerWindow(windowEl, key) {
   const closeBtn = windowEl.querySelector(".window__btn--close");
   const minBtn = windowEl.querySelector(".window__btn--min");
@@ -3990,6 +4267,7 @@ function openStandaloneBrowser() {
 
 function focusWindow(windowEl) {
   windowEl.style.zIndex = state.zIndex++;
+  updateOpenAppsState(windowEl.dataset.app, windowEl, false);
 }
 
 function minimizeWindow(key) {
@@ -4705,12 +4983,14 @@ function updateClock() {
 
 // --- Input SFX (keyboard + mouse) ---
 window.addEventListener("keydown", (e) => {
+  if (isIntroPlaying()) return;
   if (e.key.length === 1 || e.key === "Backspace" || e.key === "Enter" || e.key === "Spacebar" || e.key === " ") {
     audioManager.play("keyboard", { restart: true });
   }
 });
 
 window.addEventListener("pointerdown", () => {
+  if (isIntroPlaying()) return;
   audioManager.play("mouseClick", { restart: true });
 });
 
@@ -4732,6 +5012,9 @@ renderStartMenu();
 updateClock();
 setInterval(updateClock, 15_000);
 // updateStatusBar(); // Removed as status bar is gone
+
+// Kick off intro before showing the power/login flow
+startIntroSequence();
 
 function initializeDesktop() {
   ensureAppDefinition('timer');
@@ -4768,6 +5051,7 @@ function initializeDesktop() {
   renderStartMenu();
 
   // Restore open apps
+  ensureZIndexBaseline();
   if (gameState.openApps && gameState.openApps.length > 0) {
     gameState.openApps.forEach(appState => {
       openApp(appState.key, appState);
