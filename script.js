@@ -677,6 +677,28 @@ const appWindowSizing = {
 
 const defaultWindowSize = { width: 480, height: 360 };
 
+function clampWindowRange(value, min, max) {
+  return Math.min(Math.max(value, min), max);
+}
+
+function getViewportMetrics() {
+  const vw = Math.max(360, window?.innerWidth || document.documentElement?.clientWidth || 1280);
+  const vh = Math.max(320, window?.innerHeight || document.documentElement?.clientHeight || 720);
+  return { vw, vh };
+}
+
+function computeResponsiveWindowSize(baseWidth, baseHeight) {
+  if (!Number.isFinite(baseWidth) || !Number.isFinite(baseHeight)) return null;
+  const { vw, vh } = getViewportMetrics();
+  const scale = clampWindowRange(Math.min(vw / 1920, vh / 1080), 0.6, 1.15);
+  const scaledWidth = clampWindowRange(baseWidth * scale, 320, vw - 80);
+  const scaledHeight = clampWindowRange(baseHeight * scale, 240, vh - 120);
+  return {
+    width: `${Math.round(scaledWidth)}px`,
+    height: `${Math.round(scaledHeight)}px`,
+  };
+}
+
 function formatWindowDimension(value) {
   if (typeof value === 'number' && Number.isFinite(value)) {
     return `${value}px`;
@@ -690,6 +712,8 @@ function formatWindowDimension(value) {
 function getAppWindowSize(key) {
   const entry = appWindowSizing[key];
   const resolved = typeof entry === 'function' ? entry() : entry;
+  const responsive = computeResponsiveWindowSize(resolved?.width, resolved?.height);
+  if (responsive) return responsive;
   const width = formatWindowDimension(resolved?.width) || `${defaultWindowSize.width}px`;
   const height = formatWindowDimension(resolved?.height) || `${defaultWindowSize.height}px`;
   return { width, height };
@@ -1532,9 +1556,126 @@ const customLinkPages = [
     address: 'relay-sigma04c.onion/cortex',
     title: 'Relay Sigma',
     html: `
-      <div class="custom-page">
-        <h2>Relay Sigma</h2>
-        <p>Add SVGs, charts, or other widgets.</p>
+      <div class="sigma-file" style="background:#2c2c2c; padding:30px; font-family:'Courier New', Courier, monospace; color:#111;">
+        <style>
+          .sigma-file__container {
+            background-color: #e8e4d9;
+            max-width: 850px;
+            margin: 0 auto;
+            padding: 40px;
+            border: 2px solid #444;
+            box-shadow: 0 0 20px rgba(0,0,0,0.5);
+            position: relative;
+            color: #111;
+          }
+          .sigma-file__header {
+            border-bottom: 3px double #000;
+            margin-bottom: 30px;
+            display: flex;
+            justify-content: space-between;
+            gap: 20px;
+          }
+          .sigma-file__stamp {
+            border: 3px solid #cc0000;
+            color: #cc0000;
+            font-weight: bold;
+            padding: 10px 20px;
+            font-size: 1.1rem;
+            transform: rotate(-5deg);
+            display: inline-block;
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            opacity: 0.85;
+          }
+          .sigma-file__section {
+            background-color: #ccc;
+            padding: 5px;
+            font-weight: bold;
+            margin-top: 25px;
+            border-bottom: 2px solid #000;
+          }
+          .sigma-file__grid {
+            display: grid;
+            grid-template-columns: 1fr 2fr;
+            gap: 10px;
+            margin-top: 10px;
+            max-width: 60%;
+          }
+          .sigma-file__label {
+            font-weight: bold;
+            text-transform: uppercase;
+          }
+          .sigma-file__photo {
+            width: 200px;
+            border: 1px solid #000;
+            margin: 20px 0;
+            float: right;
+            margin-left: 20px;
+            background: url('fx/police.png') center 60%/cover no-repeat #ccc;
+          }
+          .sigma-file__redacted {
+            background-color: #000;
+            color: #000;
+            padding: 0 5px;
+            user-select: none;
+          }
+          .sigma-file__redacted:hover {
+            color: #333;
+          }
+          @media (max-width: 700px) {
+            .sigma-file__grid {
+              grid-template-columns: 1fr;
+              max-width: 100%;
+            }
+            .sigma-file__photo {
+              float: none;
+              margin-left: 0;
+              margin-right: auto;
+            }
+          }
+        </style>
+        <div class="sigma-file__container">
+          <span class="sigma-file__stamp">UZAVŘENO / NEAKTIVNÍ</span>
+          <div class="sigma-file__header">
+            <div>
+              MĚSTSKÉ POLICEJNÍ ODDĚLENÍ<br>
+              SEKCE POHŘEŠOVANÝCH OSOB
+            </div>
+            <div style="text-align:right;">
+              ČÍSLO SPISU: 4991-B<br>
+              DATUM: 14.10.2025
+            </div>
+          </div>
+          <div class="sigma-file__photo" aria-label="Police evidence photo"></div>
+          <div class="sigma-file__section">I. ÚDAJE O SUBJEKTU</div>
+          <div class="sigma-file__grid">
+            <span class="sigma-file__label">Jméno:</span><span>Maya PETROVA</span>
+            <span class="sigma-file__label">Věk:</span><span>19</span>
+            <span class="sigma-file__label">Výška/Váha:</span><span>165 cm / 55 kg</span>
+            <span class="sigma-file__label">Zvláštní znamení:</span><span>Tetování na levém zápěstí (hudební motiv).</span>
+            <span class="sigma-file__label">Status:</span><span>POHŘEŠOVANÁ ➜ PŘEKLASIFIKOVÁNO: ÚTĚK</span>
+          </div>
+          <div style="clear:both;"></div>
+          <div class="sigma-file__section">II. SHRNUTÍ INCIDENTU</div>
+          <p>
+            Matka nahlásila zmizení dcery dne 13.10. v 08:30. Dcera zmizela v noci ze svého pokoje.
+            Na místě činu <span class="sigma-file__redacted">nebyly nalezeny</span> žádné stopy násilného vniknutí. Okno v přízemí bylo otevřené.
+            Osobní věci (telefon, peněženka) zůstaly na místě.
+          </p>
+          <div class="sigma-file__section">III. POZNÁMKY VYŠETŘOVATELE (Det. Miller)</div>
+          <p>
+            Matka trvá na verzi únosu a zmiňuje online stalking uživatelem "Watcher_99". Účet nebyl nalezen – pravděpodobně smazán.
+            Nejpravděpodobnější scénář: dobrovolný odchod.
+          </p>
+          <div class="sigma-file__section">IV. ZÁVĚR A DOPORUČENÍ</div>
+          <p>
+            Případ odložen ad acta. Doporučeno <span class="sigma-file__redacted">ukončit aktivní pátrání</span> a ponechat v databázi
+            pohřešovaných pro případné budoucí ztotožnění.
+            <br><br>
+            <em>Podpis: <span style="font-family:cursive;">Det. R. Miller</span></em>
+          </p>
+        </div>
       </div>
     `,
   },
@@ -1543,9 +1684,96 @@ const customLinkPages = [
     address: 'relay-tau63l.onion/keys',
     title: 'Relay Tau',
     html: `
-      <div class="custom-page">
-        <h2>Relay Tau</h2>
-        <p>Use this slot for key fragments.</p>
+      <div class="tau-journal" style="background-color:#f0f8ff; color:#444; font-family:'Verdana',sans-serif; padding:20px; line-height:1.6;">
+        <style>
+          .tau-journal__container {
+            width: min(600px, 100%);
+            margin: 0 auto;
+            background-color: #fff;
+            padding: 40px;
+            border: 1px solid #d1d1e0;
+            box-shadow: 5px 5px 15px rgba(0,0,0,0.05);
+          }
+          .tau-journal__title {
+            color: #6a5acd;
+            text-align: center;
+            font-family: 'Georgia', serif;
+            font-style: italic;
+          }
+          .tau-journal__post {
+            margin-bottom: 40px;
+            border-bottom: 1px dashed #ccc;
+            padding-bottom: 20px;
+            position: relative;
+          }
+          .tau-journal__date {
+            font-size: 0.85rem;
+            color: #888;
+            display: block;
+            margin-bottom: 10px;
+          }
+          .tau-journal__sticker {
+            position: absolute;
+            top: 0;
+            right: 0;
+            font-size: 2rem;
+            opacity: 0.7;
+          }
+          @media (max-width: 640px) {
+            .tau-journal__container {
+              padding: 28px;
+            }
+            .tau-journal__sticker {
+              position: static;
+              display: block;
+              margin-bottom: 10px;
+              text-align: right;
+            }
+          }
+        </style>
+        <div class="tau-journal__container">
+          <h1 class="tau-journal__title">Maya's Notes 🎵</h1>
+          <p style="text-align:center; color:#888; font-size:0.9rem;">Hudba, život a všechno mezi tím.</p>
+          <hr style="border:0; border-top:2px solid #6a5acd; margin-bottom:30px;">
+
+          <article class="tau-journal__post">
+            <span class="tau-journal__sticker">🎸</span>
+            <span class="tau-journal__date">15. Srpna</span>
+            <h3>Nové tetování!</h3>
+            <p>
+              Konečně jsem to udělala! Máma sice nebyla nadšená ("Mayo, to ti zůstane navždy!"), ale já to miluju.
+              Mám na levém zápěstí malou notovou osnovu. Je to připomínka, že i když je ticho, hudba tam pořád někde je.
+              Teď už jen musím dopsat tu skladbu, co mi zní v hlavě.
+            </p>
+          </article>
+
+          <article class="tau-journal__post">
+            <span class="tau-journal__sticker">😕</span>
+            <span class="tau-journal__date">2. Září</span>
+            <h3>Divný pocit</h3>
+            <p>
+              Vracela jsem se dneska z lekce kytary a měla jsem pocit, že za mnou někdo jde.
+              Když jsem se otočila, byla tam jen prázdná ulice. Ale víte, jak to je – takové to mravenčení v zádech.
+              Asi jsem jen paranoidní z těch hororů, na které jsme koukali s Jess. Pro jistotu zítra pojedu domů autobusem.
+            </p>
+          </article>
+
+          <article class="tau-journal__post">
+            <span class="tau-journal__sticker">📷</span>
+            <span class="tau-journal__date">12. Října (Poslední záznam)</span>
+            <h3>Kdo je "Watcher"?</h3>
+            <p>
+              Někdo mi neustále komentuje fotky na Instagramu. Účet bez fotky, jméno "Watcher_99".
+              Píše věci jako "Krásné vlasy" nebo "Dneska ti to v tom modrém kabátu slušelo".
+              Ten kabát jsem měla poprvé a nikam jsem nedávala fotku.
+            </p>
+            <p>
+              Bojím se. Dneska v noci slyším venku pod oknem kroky. Pes štěká jako blázen.
+              Jdu se podívat ven. Určitě to nic není. Jen se ujistím, že je branka zavřená.
+              Hned se vrátím.
+            </p>
+          </article>
+        </div>
       </div>
     `,
   },
@@ -1554,9 +1782,75 @@ const customLinkPages = [
     address: 'relay-upsilon82w.onion/omega',
     title: 'Relay Upsilon',
     html: `
-      <div class="custom-page">
-        <h2>Relay Upsilon</h2>
-        <p>Final placeholder link. Customize as needed.</p>
+      <div class="upsilon-investigation" style="background-color:#333; color:#ddd; font-family:'Arial',sans-serif; padding:20px;">
+        <style>
+          .upsilon-investigation__wrap {
+            max-width: 800px;
+            margin: 0 auto;
+            background-color: #222;
+            padding: 40px;
+            border: 1px solid #444;
+            box-shadow: 0 0 30px rgba(0,0,0,0.4);
+          }
+          .upsilon-investigation__title {
+            border-bottom: 2px solid #cc0000;
+            padding-bottom: 10px;
+            margin-bottom: 30px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+          }
+          .upsilon-entry {
+            background-color: #1a1a1a;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-left: 4px solid #555;
+          }
+          .upsilon-entry--important {
+            border-left-color: #cc0000;
+            background-color: #2a0000;
+          }
+          .upsilon-entry__meta {
+            color: #888;
+            font-size: 0.85rem;
+            margin-bottom: 10px;
+            display: block;
+          }
+          @media (max-width: 720px) {
+            .upsilon-investigation__wrap {
+              padding: 28px;
+            }
+          }
+        </style>
+        <div class="upsilon-investigation__wrap">
+          <h1 class="upsilon-investigation__title">Deník Vyšetřování: Případ 4991 (Maya)</h1>
+          <p style="font-style:italic; color:#aaa;">"Policie to vzdala. Já ne."</p>
+          <div class="upsilon-entry">
+            <span class="upsilon-entry__meta">DEN 4: POLICIE</span>
+            <p>
+              Detektiv Miller mi řekl, abych šla domů. Že "teenagerky utíkají pořád".
+              V jejím pokoji zůstalo všechno. Peněženka, mobil, klíče. Kdo utíká bez bot?
+              Její oblíbené tenisky jsou pořád v předsíni. Vzali ji. Vím to.
+            </p>
+          </div>
+          <div class="upsilon-entry">
+            <span class="upsilon-entry__meta">DEN 22: DARK WEB</span>
+            <p>
+              Student z IT mi ukázal, jak se dostat hlouběji. Tor. Tma a špína.
+              Procházím fóra, kde se prodávají zbraně a informace. Hledám jen jedno jméno. Nebo fotku.
+            </p>
+          </div>
+          <div class="upsilon-entry upsilon-entry--important">
+            <span class="upsilon-entry__meta">DEN 45: KONTAKT</span>
+            <p>
+              Někdo mě kontaktoval. Podepisuje se jako <strong>[UNKNOWN]</strong>.
+              "Vím, kde je. Systém ji drží. Potřebujeme Hráče, který se právě připojil do sítě."
+            </p>
+            <p>
+              Poslal IP adresu a instrukce. Tvrdí, že ten Hráč je naše jediná šance. Navede ho k bráně.
+              Nevěřím mu, ale je to jediná stopa. Pokud to čteš – její jméno je Maya. Miluje kytaru. Prosím, přiveď ji domů.
+            </p>
+          </div>
+        </div>
       </div>
     `,
   }
@@ -3032,27 +3326,14 @@ let minerInstalling = false;
 
 function showLinksPdf() {
   if (!gameState.linksInstalled) installLinksApp();
-
-  try {
-    const anchor = document.createElement('a');
-    anchor.href = 'links.pdf';
-    anchor.download = 'links.pdf';
-    anchor.style.display = 'none';
-    document.body.appendChild(anchor);
-    anchor.click();
-    requestAnimationFrame(() => anchor.remove());
-  } catch (e) {
-    console.error('Failed to trigger links download', e);
-    alert('Nepodařilo se spustit stahování links.pdf. Zkontroluj, že soubor existuje.');
-  }
+  openApp('links');
 }
 
 function installResMarket() {
   if (gameState.resMarketInstalled) {
     ensureAppDefinition('resmarket');
     ensureDesktopIcon('resmarket', 'Ⓡ', 'ResMarket');
-    alert('ResMarket už je nainstalovaný.');
-    openApp('resmarket');
+    alert('ResMarket už je nainstalovaný. Spusť ho z plochy nebo Start menu.');
     return;
   }
 
@@ -3105,7 +3386,6 @@ function installResMarket() {
         stepIndex = steps.length - 1;
         finishInstall();
         renderStep();
-          try { openApp('resmarket'); } catch (e) { console.error(e); }
       }
     }, 260);
   };
@@ -3354,7 +3634,7 @@ function installCryptoMiner() {
   if (gameState.cryptoMinerInstalled) {
     ensureAppDefinition('cryptominer');
     ensureDesktopIcon('cryptominer', '⛏', 'Crypto Miner');
-    openApp('cryptominer');
+    alert('Crypto Miner už je nainstalovaný. Najdeš ho na ploše.');
     return;
   }
 
@@ -3371,7 +3651,7 @@ function installCryptoMiner() {
   const steps = [
     { title: 'Crypto Miner Loader', body: 'Stahuji závislosti a připravuji sandbox.', primary: 'Další' },
     { title: 'Downloading Payload', body: '<div class="install-bar"><div class="install-fill" id="miner-install-fill" style="width:0%"></div></div><p style="margin-top:8px;">Přesouvám image do Res systému...</p>', primary: 'Čekej', installing: true },
-    { title: 'Hotovo', body: 'Miner je připravený. Otevři aplikaci a dolaď umístění rigů.', primary: 'Spustit', done: true }
+    { title: 'Hotovo', body: 'Miner je připravený. Najdeš ho na ploše i ve Start menu.', primary: 'Zavřít', done: true }
   ];
 
   let stepIndex = 0;
@@ -3427,7 +3707,6 @@ function installCryptoMiner() {
         stepIndex = steps.length - 1;
         finishInstall();
         renderStep();
-        try { openApp('cryptominer'); } catch (err) { console.error(err); }
       }
     }, 240);
   };
@@ -5817,7 +6096,7 @@ async function startStory(chatContainer, inputEl, sendBtn) {
       const btn = msgDiv.querySelector('.file-download-btn');
       btn.addEventListener('click', () => {
         btn.disabled = true;
-        btn.textContent = step.action === 'showLinksPdf' ? "Stahuji..." : "Instaluji...";
+        btn.textContent = step.action === 'showLinksPdf' ? "Otevírám..." : "Instaluji...";
         if (step.action === 'installTor') {
             installTor();
         } else if (step.action === 'showLinksPdf') {

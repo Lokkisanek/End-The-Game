@@ -2,120 +2,94 @@
 <html lang="cs">
 <head>
     <meta charset="UTF-8">
-    <title>UVB-76_DIGITAL</title>
+    <title>Maya's Notes 🎵</title>
     <style>
         body {
-            background-color: #001a00;
-            color: #00ff00;
-            font-family: 'Courier New', monospace;
-            padding: 50px;
-            text-align: center;
-        }
-        input[type=range] {
-            width: 80%;
-            margin: 40px 0;
-        }
-        .display {
-            font-size: 4em;
-            border: 2px solid #004400;
-            background: #000;
+            background-color: #f0f8ff; /* AliceBlue */
+            color: #444;
+            font-family: 'Verdana', sans-serif;
             padding: 20px;
-            margin-bottom: 20px;
-            text-shadow: 0 0 10px #00ff00;
+            line-height: 1.6;
         }
-        .signal-bar {
-            height: 20px;
-            background-color: #003300;
-            width: 80%;
+        .container {
+            width: 600px;
             margin: 0 auto;
-            position: relative;
+            background-color: white;
+            padding: 40px;
+            border: 1px solid #d1d1e0;
+            box-shadow: 5px 5px 15px rgba(0,0,0,0.05);
         }
-        .signal-fill {
-            height: 100%;
-            background-color: #00ff00;
-            width: 5%;
-            transition: width 0.1s;
-            box-shadow: 0 0 15px #00ff00;
+        h1 {
+            color: #6a5acd; /* SlateBlue */
+            text-align: center;
+            font-family: 'Georgia', serif;
+            font-style: italic;
         }
-        .hidden-msg {
-            display: none;
-            color: red;
-            font-weight: bold;
-            margin-top: 30px;
-            font-size: 1.5em;
-            animation: flash 0.2s infinite;
+        .post {
+            margin-bottom: 40px;
+            border-bottom: 1px dashed #ccc;
+            padding-bottom: 20px;
         }
-        @keyframes flash {
-            0% { opacity: 1; }
-            50% { opacity: 0; }
+        .date {
+            font-size: 0.8em;
+            color: #888;
+            display: block;
+            margin-bottom: 10px;
+        }
+        .sticker {
+            float: right;
+            font-size: 2em;
+            opacity: 0.7;
         }
     </style>
 </head>
 <body>
 
-    <h1>SHORTWAVE RECEIVER v4.0</h1>
-    <p>Ladění frekvence (MHz)</p>
+<div class="container">
+    <h1>Maya's Notes 🎵</h1>
+    <p style="text-align: center; color: #888; font-size: 0.9em;">Hudba, život a všechno mezi tím.</p>
+    <hr style="border: 0; border-top: 2px solid #6a5acd; margin-bottom: 30px;">
 
-    <div class="display" id="freq-display">88.0 MHz</div>
-    
-    <div class="signal-bar">
-        <div class="signal-fill" id="signal-strength"></div>
+    <div class="post">
+        <span class="sticker">🎸</span>
+        <span class="date">15. Srpna</span>
+        <h3>Nové tetování!</h3>
+        <p>
+            Konečně jsem to udělala! Máma sice nebyla nadšená ("Mayo, to ti zůstane navždy!"), ale já to miluju.
+            Mám na levém zápěstí malou notovou osnovu. Je to připomínka, že i když je ticho, hudba tam pořád někde je.
+            Teď už jen musím dopsat tu skladbu, co mi zní v hlavě.
+        </p>
     </div>
 
-    <input type="range" min="880" max="1080" value="880" id="tuner" oninput="tuneRadio()">
-
-    <div id="noise-text" style="margin-top: 20px; color: #004400;">
-        [ŠUM...]
+    <div class="post">
+        <span class="sticker">😕</span>
+        <span class="date">2. Září</span>
+        <h3>Divný pocit</h3>
+        <p>
+            Vracela jsem se dneska z lekce kytary a měla jsem pocit, že za mnou někdo jde.
+            Když jsem se otočila, byla tam jen prázdná ulice. Ale víte, jak to je – takové to mravenčení v zádech.
+            Asi jsem jen paranoidní z těch hororů, na které jsme koukali s Jess. 
+            Ale pro jistotu... zítra půjdu domů autobusem.
+        </p>
     </div>
 
-    <div class="hidden-msg" id="horror-msg">
-        NĚKDO KLEPE NA TVOJE OKNO.<br>
-        NĚKDO KLEPE NA TVOJE OKNO.<br>
-        NĚKDO KLEPE NA TVOJE OKNO.
+    <div class="post">
+        <span class="sticker">📷</span>
+        <span class="date">12. Října (Poslední záznam)</span>
+        <h3>Kdo je "Watcher"?</h3>
+        <p>
+            Někdo mi neustále komentuje fotky na Instgramu. Účet bez fotky, jméno "Watcher_99".
+            Píše věci jako "Krásné vlasy" nebo "Dneska ti to v tom modrém kabátu slušelo".
+            Já ten kabát měla dneska poprvé na sobě. A nedávala jsem nikam fotku.
+        </p>
+        <p>
+            Bojím se. Dneska v noci slyším venku pod oknem kroky. Pes štěká jako blázen.
+            Jdu se podívat ven. Určitě to nic není. Jen se ujistím, že je branka zavřená.
+            Hned se vrátím.
+        </p>
     </div>
 
-<script>
-    function tuneRadio() {
-        const val = document.getElementById('tuner').value;
-        const display = document.getElementById('freq-display');
-        const signal = document.getElementById('signal-strength');
-        const noise = document.getElementById('noise-text');
-        const horror = document.getElementById('horror-msg');
-
-        // Formátování frekvence (např. 104.5)
-        display.innerText = (val / 10).toFixed(1) + " MHz";
-
-        // Cílová frekvence "démona" je 104.5 MHz (val 1045)
-        const target = 1045;
-        const diff = Math.abs(val - target);
-
-        // Logika síly signálu
-        if (diff < 5) {
-            // Jsme blízko
-            signal.style.width = (100 - (diff * 10)) + "%";
-            signal.style.backgroundColor = "red";
-            noise.innerText = "PRÍJEM SIGNÁLU: DETEKOVÁN HLAS";
-            noise.style.color = "red";
-            
-            if (diff === 0) {
-                // Přesný zásah
-                horror.style.display = "block";
-                document.body.style.backgroundColor = "#1a0000";
-            } else {
-                horror.style.display = "none";
-                document.body.style.backgroundColor = "#001a00";
-            }
-        } else {
-            // Jsme daleko
-            signal.style.width = Math.random() * 10 + "%"; // Náhodný šum
-            signal.style.backgroundColor = "#00ff00";
-            noise.innerText = "[ŠUM...]";
-            noise.style.color = "#004400";
-            horror.style.display = "none";
-            document.body.style.backgroundColor = "#001a00";
-        }
-    }
-</script>
+</div>
 
 </body>
 </html>

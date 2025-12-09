@@ -1,158 +1,42 @@
-<!DOCTYPE html>
-<html lang="cs">
-<head>
-    <meta charset="UTF-8">
-    <title>TARGET_ACQUIRED</title>
-    <style>
-        body {
-            background-color: #050505;
-            color: #cc0000;
-            font-family: 'Courier New', monospace;
-            padding: 40px;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            overflow: hidden;
-        }
-
-        .dox-container {
-            border: 2px solid #cc0000;
-            padding: 30px;
-            width: 600px;
-            background-color: #0a0000;
-            box-shadow: 0 0 30px rgba(200, 0, 0, 0.3);
-            position: relative;
-        }
-
-        h1 {
-            text-align: center;
-            border-bottom: 1px dashed #cc0000;
-            padding-bottom: 15px;
-            margin-top: 0;
-            font-size: 2em;
-            text-shadow: 0 0 10px #cc0000;
-        }
-
-        .data-row {
-            margin: 15px 0;
-            font-size: 1.2em;
-            display: flex;
-            justify-content: space-between;
-        }
-
-        .label {
-            color: #666;
-        }
-
-        .value {
-            color: #fff;
-            font-weight: bold;
-            text-shadow: 0 0 5px white;
-        }
-
-        .loading {
-            color: #cc0000;
-            animation: blink 0.5s infinite;
-        }
-
-        @keyframes blink {
-            50% { opacity: 0; }
-        }
-
-        .scary-message {
-            margin-top: 30px;
-            text-align: center;
-            color: #ff3333;
-            font-style: italic;
-        }
-    </style>
-</head>
-<body>
-
-<div class="dox-container">
-    <h1>CÍL LOKALIZOVÁN</h1>
+<div style="font-family: 'Times New Roman', serif; background: #fff; color: #222; padding: 40px; max-width: 700px; margin: 0 auto; border: 1px solid #ccc; box-shadow: 0 0 20px rgba(0,0,0,0.1);">
+    <h1 style="text-align: center; color: #555;">Hledáme Mayu</h1>
+    <hr>
     
-    <div id="data-content">
-        <p class="data-row">
-            <span class="label">VEŘEJNÁ IP:</span>
-            <span class="value" id="ip">SKENOVÁNÍ...</span>
-        </p>
-        <p class="data-row">
-            <span class="label">POSKYTOVATEL:</span>
-            <span class="value" id="isp">---</span>
-        </p>
-        <p class="data-row">
-            <span class="label">MĚSTO:</span>
-            <span class="value" id="city">---</span>
-        </p>
-        <p class="data-row">
-            <span class="label">STÁT:</span>
-            <span class="value" id="country">---</span>
-        </p>
-        <p class="data-row">
-            <span class="label">OPERAČNÍ SYSTÉM:</span>
-            <span class="value" id="os">---</span>
-        </p>
-        <p class="data-row">
-            <span class="label">STAV BATERIE:</span>
-            <span class="value" id="battery">Neznámý</span>
-        </p>
+    <div style="margin-bottom: 30px;">
+        <p><strong>22. Listopad</strong></p>
+        <p>Policie případ odložila. Řekli mi, ať se smířím s tím, že utekla. Ale ona by neodešla bez svého psa. Nechala tady všechno. I svou kytaru.</p>
     </div>
 
-    <div class="scary-message" id="final-msg" style="opacity: 0; transition: opacity 2s;">
-        "Vím, že jsi v <span id="scary-city">městě</span>. Vím, že používáš <span id="scary-os">PC</span>.<br>
-        Už nemáš kam utéct."
+    <div style="margin-bottom: 30px;">
+        <p><strong>5. Prosinec</strong></p>
+        <p>Někdo mi poslal odkaz na stránku "Doll Maker". Nechtěla jsem to otevřít, ale musela jsem. Viděla jsem tam fotky. Rozmazané, hrozné fotky.</p>
+        <p>Na jedné z nich byla dívka s tetováním <strong>notové osnovy</strong> na zápěstí. Byla to Maya. Jsem si jistá. Bože, její oči... byly tak prázdné.</p>
+    </div>
+
+    <div style="background: #eee; padding: 15px; font-style: italic;">
+        "Pokud toto někdo čte a má schopnosti ji najít... prosím. Nemám peníze. Nemám kontakty. Mám jen naději, že tam venku je někdo dobrý."
     </div>
 </div>
 
-<script>
-    // 1. Získání informací o OS a Prohlížeči
-    const platform = navigator.platform;
-    document.getElementById('os').innerText = platform;
-
-    // 2. Pokus o získání baterie (Funguje na noteboocích/mobilech v Chrome/Edge)
-    if (navigator.getBattery) {
-        navigator.getBattery().then(function(battery) {
-            const level = Math.round(battery.level * 100) + "%";
-            const charging = battery.charging ? " (Nabíjí se)" : "";
-            document.getElementById('battery').innerText = level + charging;
-        });
-    }
-
-    // 3. Získání IP a Lokace přes externí API (používá ipapi.co - zdarma pro malé objemy)
-    // Toto je to kouzlo, které "ví", kde bydlíš
-    fetch('https://ipapi.co/json/')
-        .then(response => response.json())
-        .then(data => {
-            document.getElementById('ip').innerText = data.ip;
-            document.getElementById('isp').innerText = data.org; // Poskytovatel internetu
-            document.getElementById('city').innerText = data.city;
-            document.getElementById('country').innerText = data.country_name;
-
-            // Vyplnění děsivé zprávy dole
-            document.getElementById('scary-city').innerText = data.city;
-            document.getElementById('scary-os').innerText = platform;
-            
-            // Zobrazení zprávy
-            document.getElementById('final-msg').style.opacity = 1;
-        })
-        .catch(error => {
-            console.error('Error fetching IP:', error);
-            document.getElementById('ip').innerText = "CONNECTION MASKED";
-            document.getElementById('city').innerText = "UNKNOWN";
-        });
-
-    // 4. TRIK SE JMÉNEM (Volitelné)
-    // Pokud jsi v předchozí stránce uložil jméno do localStorage (např. localStorage.setItem('playerName', 'Petr'))
-    // tak ho tady můžeš zobrazit.
-    /*
-    const savedName = localStorage.getItem('playerName');
-    if(savedName) {
-        // Přidej řádek se jménem do HTML
-    }
-    */
-</script>
-
-</body>
-</html>
+<div style="background: #000; color: #00ff00; font-family: monospace; padding: 20px; height: 100vh;">
+    <h3>> OPENING: GUIDANCE_PROTOCOL_V4.txt</h3>
+    
+    <p>> SUBJEKT: Nový Uživatel (Hráč)</p>
+    <p>> STATUS: Aktivní</p>
+    <br>
+    <p>
+        <strong>POZNÁMKA:</strong> Subjekt vykazuje vysokou míru zvědavosti. To je užitečné.
+        Systém Red Room má slabinu v externím přístupu. Já nemohu vstoupit přímo – můj digitální podpis by spustil alarm.
+        Ale "Hráč" je čistý. Je to duch. Nikdo neví, že existuje.
+    </p>
+    <br>
+    <p>
+        Navedu ho k bráně. Nechám ho zadat kódy.
+        Pokud uspěje, uvidíme, co se stane.
+        Pokud selže... nuže, najdu si dalšího uživatele.
+    </p>
+    <br>
+    <p style="color: #555;">
+        > END OF LOG
+    </p>
+</div>
