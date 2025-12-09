@@ -1853,6 +1853,14 @@ const customLinkPages = [
         </div>
       </div>
     `,
+  },
+   {
+    id: 'redroom',
+    address: 'relay-upsilon82w.onion/omega',
+    title: 'Relay Upsilon',
+    html: `
+      redroom placeholder
+    `,
   }
 ];
 

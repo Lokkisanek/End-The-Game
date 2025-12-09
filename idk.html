@@ -55,8 +55,12 @@
 
         /* Video Feed */
         .video-feed {
-            flex: 3; background: #050000; position: relative;
-            display: flex; justify-content: center; align-items: center;
+            flex: 3;
+            background: #050000;
+            position: relative;
+            display: flex;
+            justify-content: center;
+            align-items: center;
             overflow: hidden;
         }
 
@@ -68,8 +72,8 @@
 
         .victim-placeholder {
             position: relative;
-            width: min(420px, 80%);
-            aspect-ratio: 3 / 4;
+            width: 100%;
+            height: 100%;
             background: url('fx/redroom.jpeg') center/cover no-repeat;
             border: 6px solid rgba(255, 0, 0, 0.35);
             box-shadow: 0 0 30px rgba(255, 0, 0, 0.4), inset 0 0 40px rgba(0, 0, 0, 0.9);
@@ -330,10 +334,8 @@
 
         // Vizuální smrt Mayi
         setTimeout(() => {
-            victim.style.color = "#444";
-            victim.style.animation = "none"; // Přestane dýchat
-            victim.style.transform = "rotate(20deg) scale(0.9)"; // Zhroutí se
-            victim.innerHTML = "☠️"; // Nebo změna fotky na mrtvou
+            victim.style.transform = "rotate(6deg) scale(0.92)";
+            victim.classList.add('victim-placeholder--deceased');
         }, 6000);
 
         setTimeout(() => addMsg('SYSTEM', 'VITAL SIGNS: 0. SUBJECT DECEASED.', 'sys'), 7000);
@@ -346,6 +348,7 @@
 
         // Game Over Text
         setTimeout(() => {
+            stopRedRoomAudio();
             document.body.innerHTML = `
                 <div style="height:100vh; display:flex; justify-content:center; align-items:center; background:white; flex-direction:column; color:black; font-family:sans-serif;">
                     <h1 style="font-size:4em; margin:0;">GAME OVER</h1>
