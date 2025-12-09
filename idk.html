@@ -62,6 +62,26 @@
             justify-content: center;
             align-items: center;
             overflow: hidden;
+            cursor: crosshair;
+        }
+
+        .video-feed::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            background: url('fx/gun.png') no-repeat 50% 70%;
+            background-size: clamp(120px, 20vw, 240px);
+            filter: grayscale(1) drop-shadow(0 0 15px rgba(0,0,0,0.8));
+        }
+
+        .video-feed:hover::after {
+            opacity: 0.65;
         }
 
         .scanlines {
@@ -89,6 +109,21 @@
             mix-blend-mode: multiply;
             animation: blackPulse 4s ease-in-out infinite;
             pointer-events: none;
+        }
+
+        .victim-placeholder::before {
+            content: '';
+            position: absolute;
+            top: 48%;
+            left: 52%;
+            width: clamp(80px, 20%, 130px);
+            aspect-ratio: 1;
+            border: 2px solid rgba(255, 0, 0, 0.3);
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            animation: targetPulse 1.4s ease-in-out infinite;
+            pointer-events: none;
+            box-shadow: inset 0 0 15px rgba(255,0,0,0.5);
         }
 
         .victim-placeholder--deceased {
@@ -146,6 +181,7 @@
         @keyframes breathe { 0% { opacity:0.6; transform: scale(1); } 50% { opacity:1; transform: scale(1.02); } 100% { opacity:0.6; transform: scale(1); } }
         @keyframes camPulse { 0% { transform: scale(0.995); box-shadow: 0 0 20px rgba(255,0,0,0.2);} 50% { transform: scale(1.01); box-shadow: 0 0 50px rgba(255,0,0,0.55);} 100% { transform: scale(0.995); box-shadow: 0 0 20px rgba(255,0,0,0.2);} }
         @keyframes blackPulse { 0% { opacity: 0.25; } 50% { opacity: 0.65; } 100% { opacity: 0.25; } }
+        @keyframes targetPulse { 0% { transform: translate(-50%,-50%) scale(0.95); opacity:0.6; } 50% { transform: translate(-50%,-50%) scale(1.1); opacity:1; } 100% { transform: translate(-50%,-50%) scale(0.95); opacity:0.6; } }
         @keyframes blink { 50% { opacity: 0; } }
 
         /* Ending Overlay */
@@ -357,6 +393,58 @@
                 </div>
             `;
         }, 15000);
+    }
+
+    // --- 4. SHOOT INTERACTION ---
+    const videoFeed = document.querySelector('.video-feed');
+    let hasShot = false;
+
+    function triggerHeadshot() {
+        if (hasShot) return;
+        hasShot = true;
+
+        const flash = document.createElement('div');
+        flash.style.position = 'fixed';
+        flash.style.inset = '0';
+        flash.style.background = '#fff';
+        flash.style.opacity = '0';
+        flash.style.pointerEvents = 'none';
+        flash.style.transition = 'opacity 0.15s ease';
+        flash.style.zIndex = '250';
+        document.body.appendChild(flash);
+        requestAnimationFrame(() => {
+            flash.style.opacity = '1';
+            setTimeout(() => flash.style.opacity = '0', 120);
+        });
+        setTimeout(() => flash.remove(), 450);
+
+        const gunshot = new Audio('fx/gunshot.mp3');
+        gunshot.volume = 0.9;
+        gunshot.play().catch(() => {});
+
+        const ringing = new Audio('fx/ear-ringing.mp3');
+        ringing.volume = 0.5;
+        setTimeout(() => ringing.play().catch(() => {}), 180);
+
+        setTimeout(() => {
+            stopRedRoomAudio();
+            document.body.innerHTML = `
+                <div style="height:100vh; display:flex; justify-content:center; align-items:center; background:#000; flex-direction:column; color:#f00; font-family:'Courier New', monospace; gap:1rem;">
+                    <h1 style="font-size:3.5em; margin:0; letter-spacing:8px;">TRANSMISSION LOST</h1>
+                    <p style="color:#aaa; text-transform:uppercase;">Odpojil ses od feedu. Subjekt neexistuje.</p>
+                </div>
+            `;
+            setTimeout(() => {
+                try { ringing.pause(); ringing.currentTime = 0; } catch (err) {}
+            }, 200);
+        }, 600);
+    }
+
+    if (videoFeed) {
+        videoFeed.addEventListener('click', () => {
+            if (document.getElementById('room-screen').style.display !== 'flex') return;
+            triggerHeadshot();
+        });
     }
 </script>
 

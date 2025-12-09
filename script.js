@@ -530,7 +530,6 @@ function stopAllThreats() {
   checkThreats();
   updateStatusBar();
   // restart passive ticker at zero
-  startThreatSystem();
 }
 
 if (devStopThreatsBtn) {
@@ -5307,8 +5306,6 @@ function gameOver(reason, options = {}) {
   });
 }
 
-// start threat system on load
-startThreatSystem();
 
 function primeTorHome() {
   gameState.currentPage = 'about:tor';
