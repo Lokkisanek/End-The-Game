@@ -5069,20 +5069,7 @@ function startNumberHack() {
 let threatInterval = null;
 let threatLevel = savedData ? (savedData.threatLevel || 0) : 0; // 0..100
 
-function startThreatSystem() {
-  if (threatInterval) return;
-  threatInterval = setInterval(() => {
-    // if browser open (we consider it's open when currentPage exists), increase threat
-    if (gameState.currentPage && gameState.torRunning) {
-      threatLevel = Math.min(100, threatLevel + Math.floor(Math.random() * 8) + 2);
-      // Random chance to spawn events based on level
-      const rnd = Math.random() * 100;
-      if (rnd < threatLevel * 0.02) triggerBreather();
-      if (rnd < threatLevel * 0.01) triggerKidnapper();
-    }
-    updateStatusBar();
-  }, 3500);
-}
+
 
 function checkThreats() {
   // visual feedback: if threatLevel high, show overlay
