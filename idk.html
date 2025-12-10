@@ -419,25 +419,159 @@
         setTimeout(() => flash.remove(), 450);
 
         const gunshot = new Audio('fx/gunshot.mp3');
-        gunshot.volume = 0.9;
+        gunshot.volume = 1;
         gunshot.play().catch(() => {});
 
         const ringing = new Audio('fx/ear-ringing.mp3');
-        ringing.volume = 0.5;
+        ringing.volume = 0.8;
+        ringing.loop = true;
+
+        const bodyFall = new Audio('fx/bodyfall.mp3');
+        bodyFall.volume = 0.8;
+
         setTimeout(() => ringing.play().catch(() => {}), 180);
+        setTimeout(() => bodyFall.play().catch(() => {}), 260);
+
+        const whiteHoldMs = 8000;
+        const fadeToBlackMs = 4500;
+        const whiteInitDelay = 80;
 
         setTimeout(() => {
             stopRedRoomAudio();
-            document.body.innerHTML = `
-                <div style="height:100vh; display:flex; justify-content:center; align-items:center; background:#000; flex-direction:column; color:#f00; font-family:'Courier New', monospace; gap:1rem;">
-                    <h1 style="font-size:3.5em; margin:0; letter-spacing:8px;">TRANSMISSION LOST</h1>
-                    <p style="color:#aaa; text-transform:uppercase;">Odpojil ses od feedu. Subjekt neexistuje.</p>
-                </div>
-            `;
+            const roomScreenEl = document.getElementById('room-screen');
+            if (roomScreenEl) roomScreenEl.style.visibility = 'hidden';
+
+            const white = document.createElement('div');
+            white.style.position = 'fixed';
+            white.style.inset = '0';
+            white.style.background = '#fff';
+            white.style.opacity = '0';
+            white.style.transition = 'none';
+            white.style.zIndex = '300';
+            document.body.appendChild(white);
+
+            requestAnimationFrame(() => {
+                white.style.opacity = '1';
+            });
+
             setTimeout(() => {
-                try { ringing.pause(); ringing.currentTime = 0; } catch (err) {}
-            }, 200);
-        }, 600);
+                const black = document.createElement('div');
+                black.style.position = 'fixed';
+                black.style.inset = '0';
+                black.style.background = '#000';
+                black.style.opacity = '0';
+                black.style.transition = `opacity ${fadeToBlackMs / 1000}s ease`;
+                black.style.zIndex = '400';
+                document.body.appendChild(black);
+
+                white.style.transition = `opacity ${fadeToBlackMs / 1000}s ease`;
+                requestAnimationFrame(() => {
+                    white.style.opacity = '0';
+                    black.style.opacity = '1';
+                });
+
+                setTimeout(() => {
+                    ringing.pause();
+                    ringing.currentTime = 0;
+                    showEndingSlides();
+                }, fadeToBlackMs + 250);
+            }, whiteHoldMs);
+        }, whiteInitDelay);
+    }
+
+    function showEndingSlides() {
+        const slides = [
+            {
+                title: 'STISK SPOUŠTĚ',
+                text: 'Zastřelil jsi Mayu. Nebyl to únik, ale popravčí gesto vysílané stovkám očí.',
+                duration: 4200
+            },
+            {
+                title: 'MATKA SE NENAŠLA',
+                text: 'Myslel jsi, že najdeš odpovědi, ale její matku už nikdy nenašli.',
+                duration: 4200
+            },
+            {
+                title: 'UNKNOWN SE ODPOJIL',
+                text: 'Unknown přerušil spojení a spálil všechny stopy. Feed zhasl, logy zmizely.',
+                duration: 4200
+            },
+            {
+                title: 'NEZODPOVĚZENÁ OTÁZKA',
+                text: 'Kdo je vlastně Unknown a proč ti pomáhal?',
+                duration: 7000,
+                accent: true
+            }
+        ];
+
+        const endingTrack = new Audio('fx/ending.wav');
+        endingTrack.volume = 0.85;
+        endingTrack.loop = false;
+        endingTrack.play().catch(() => {});
+
+        document.body.innerHTML = '';
+        document.body.style.margin = '0';
+        document.body.style.background = '#000';
+        document.body.style.color = '#fff';
+        document.body.style.fontFamily = "'Space Grotesk', 'Helvetica Neue', sans-serif";
+
+        const endingScreen = document.createElement('div');
+        endingScreen.id = 'ending-screen';
+        endingScreen.className = 'intro-screen intro-screen--hidden';
+        endingScreen.setAttribute('aria-live', 'polite');
+        endingScreen.style.zIndex = '200000';
+
+        const content = document.createElement('div');
+        content.className = 'intro-content';
+        const textWrap = document.createElement('div');
+        textWrap.className = 'intro-text';
+        const title = document.createElement('h1');
+        const body = document.createElement('p');
+
+        textWrap.appendChild(title);
+        textWrap.appendChild(body);
+        content.appendChild(textWrap);
+        endingScreen.appendChild(content);
+        document.body.appendChild(endingScreen);
+
+        let endingIndex = 0;
+        let slideTimer = null;
+
+        const applySlide = () => {
+            const data = slides[endingIndex];
+            if (!data) return;
+            title.textContent = data.title;
+            body.textContent = data.text;
+        };
+
+        const revealSlide = () => {
+            endingScreen.classList.remove('intro-screen--hidden');
+            const duration = slides[endingIndex]?.duration || 4000;
+            clearTimeout(slideTimer);
+            slideTimer = setTimeout(() => {
+                if (endingIndex >= slides.length - 1) return;
+                endingScreen.classList.add('intro-screen--hidden');
+                setTimeout(() => {
+                    endingIndex += 1;
+                    applySlide();
+                    revealSlide();
+                }, 400);
+            }, duration);
+        };
+
+        endingScreen.addEventListener('click', () => {
+            if (endingIndex >= slides.length - 1) return;
+            endingScreen.classList.add('intro-screen--hidden');
+            clearTimeout(slideTimer);
+            setTimeout(() => {
+                endingIndex += 1;
+                applySlide();
+                revealSlide();
+            }, 250);
+        });
+
+        applySlide();
+        requestAnimationFrame(() => revealSlide());
     }
 
     if (videoFeed) {
